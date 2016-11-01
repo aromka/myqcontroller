@@ -63,7 +63,7 @@ var exports = module.exports = new function () {
             return;
         }
 
-        alert('Refreshing security tokens...');
+        console.log('Refreshing security tokens...');
         failed = true;
 
         //abort refreshes
