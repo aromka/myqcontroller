@@ -39,7 +39,7 @@ private getLocalServerURN() {
 
 preferences {
 	page(name: "prefWelcome", title: "Connect to MyQ Controller")
-    page(name: "prefModulesPrepare", title: "Home Cloud Hub Modules")
+    page(name: "prefPrepare", title: "Checking connection...")
 	page(name: "prefMyQ", title: "MyQ™ Integration")
 	page(name: "prefMyQConfirm", title: "MyQ™ Integration")
 }
@@ -50,9 +50,9 @@ preferences {
 /***********************************************************************/
 def prefWelcome(params) {
 
-    state.ihch = [security: [:]]
+    state.ihch = [security]
 
-    return dynamicPage(name: "prefWelcome", title: "Connect to MyQ Controller local server", nextPage: "prefModulesPrepare") {
+    return dynamicPage(name: "prefWelcome", title: "Connect to MyQ Controller local server", nextPage: "prefPrepare") {
         atomicState.hchLocalServerIp = null
         def hchLocalServerIp = null
 
@@ -62,14 +62,14 @@ def prefWelcome(params) {
     }
 }
 
-def prefModulesPrepare(params) {
-    state.ihch.localServerIp = params.hchLocalServerIp
-    
-    if (doHCHLogin()) {
+def prefPrepare(params) {
+    state.ihch.localServerIp = settings.hchLocalServerIp
+
+    if (doLocalLogin()) {
     	doMyQLogin(true, true)
 		return prefMyQ()
 	} else {
-        return dynamicPage(name: "prefModulesPrepare",  title: "Error connecting to MyQ Controller local server") {
+        return dynamicPage(name: "prefPrepare",  title: "Error connecting to MyQ Controller local server") {
             section(){
                 paragraph "Sorry, your local server does not seem to respond at ${state.ihch.localServerIp}."
             }
@@ -78,7 +78,7 @@ def prefModulesPrepare(params) {
 }
 
 def prefMyQ() {
-    return dynamicPage(name: "prefMyQ", title: "MyQ™ Integration", nextPage:"prefMyQConfirm", install: state.ihch.useMyQ) {
+    return dynamicPage(name: "prefMyQ", title: "MyQ™ Integration", nextPage:"prefMyQConfirm") {
         section("MyQ Login Credentials"){
             input("myqUsername", "email", title: "Username", description: "Your MyQ™ login", required: true)
             input("myqPassword", "password", title: "Password", description: "Your MyQ™ password", required: true)
@@ -91,7 +91,7 @@ def prefMyQ() {
 
 def prefMyQConfirm() {
     if (doMyQLogin(true, true)) {
-		return dynamicPage(name: "prefMyQConfirm", title: "MyQ™ Integration", nextPage:"prefModules") {
+		return dynamicPage(name: "prefMyQConfirm", title: "MyQ™ Integration Completed") {
 			section(){
 				paragraph "Congratulations! You have successfully connected your MyQ™ system."
 			}
@@ -109,9 +109,15 @@ def prefMyQConfirm() {
 /***********************************************************************/
 /*                           LOGIN PROCEDURES                          */
 /***********************************************************************/
-/* Login to Home Cloud Hub                                             */
+/* Login to local server                                               */
 /***********************************************************************/
-private doHCHLogin() {
+private doLocalLogin() {
+
+	if(!state.ihch.subscribed) {
+		subscribe(location, null, lanEventHandler, [filterEvents:false])
+		state.ihch.subscribed = true
+    }
+
     atomicState.hchPong = false
 
     log.trace "Pinging local server at " + state.ihch.localServerIp
@@ -122,6 +128,7 @@ private doHCHLogin() {
     while (cnt--) {
         pause(200)
         hchPong = atomicState.hchPong
+        log.trace "Pong: " + atomicState.hchPong
         if (hchPong) {
             return true
         }
@@ -133,24 +140,22 @@ private doHCHLogin() {
 /* Login to MyQ                                                        */
 /***********************************************************************/
 def doMyQLogin(installing, force) {
-	def module_name = 'myq';
 
     // if cookies haven't expired and unless we need to force a login, we report all is pink
-    if (!installing && !force && state.hch.security[module_name] && state.hch.security[module_name].connected && (state.hch.security[module_name].expires > now())) {
+    if (!installing && !force && state.hch.security && state.hch.security.connected && (state.hch.security.expires > now())) {
 		log.info "Reusing previously login for MyQ"
 		return true;
     }
 
     // setup our security descriptor
     def hch = (installing ? state.ihch : state.hch)
-    hch.useMyQ = false
-    hch.security[module_name] = [
+    hch.security = [
     	'enabled': !!(settings.myqUsername || settings.myqPassword),
         'controllable': settings.myqControllable,
         'connected': false
     ]
 
-    if (hch.security[module_name].enabled) {
+    if (hch.security.enabled) {
     	log.info "Logging in to MyQ..."
 
         // perform the login, retrieve token
@@ -160,11 +165,10 @@ def doMyQLogin(installing, force) {
 			// check response, continue if 200 OK
        		if (response.status == 200) {
 				if (response.data && response.data.SecurityToken) {
-                    hch.security[module_name].securityToken = response.data.SecurityToken
-                    hch.security[module_name].connected = now()
-                	hch.security[module_name].expires = now() + 5000 //expires in 5 minutes
+                    hch.security.securityToken = response.data.SecurityToken
+                    hch.security.connected = now()
+                	hch.security.expires = now() + 5000 //expires in 5 minutes
 					log.info "Successfully connected to MyQ"
-                    hch.useMyQ = true
                 	return true;
                 }
 			}
@@ -192,8 +196,8 @@ def uninstalled() {
 }
 
 def initialize() {
-    state.installed = true    
-    // get the installing hch state
+
+    state.installed = true
     state.hch = state.ihch
 
 	// login to myq
@@ -202,7 +206,7 @@ def initialize() {
     // initialize the local server
     sendLocalServerCommand state.hch.localServerIp, "init", [
         server: getHubLanEndpoint(),
-        modules: state.hch.security
+        security: state.hch.security
     ]
 
     // listen to LAN incoming messages
@@ -237,12 +241,12 @@ def lanEventHandler(evt) {
     def description = evt.description
     def hub = evt?.hubId
 	def parsedEvent = parseLanMessage(description)
-	
+
 	// discovery
 	if (parsedEvent.ssdpTerm && parsedEvent.ssdpTerm.contains(getLocalServerURN())) {
         atomicState.hchLocalServerIp = convertHexToIP(parsedEvent.networkAddress)
 	}
-    
+
     // ping response
     if (parsedEvent.data && parsedEvent.data.service && (parsedEvent.data.service == "hch")) {
 	    def msg = parsedEvent.data
@@ -250,7 +254,7 @@ def lanEventHandler(evt) {
         	//log in successful to local server
             log.info "Successfully contacted local server"
 			atomicState.hchPong = true
-        }   	
+        }
     }
 
     if (parsedEvent.data && parsedEvent.data.event) {
@@ -258,7 +262,7 @@ def lanEventHandler(evt) {
         	case "init":
                 sendLocalServerCommand state.hch.localServerIp, "init", [
                             server: getHubLanEndpoint(),
-                            modules: processSecurity([module: parsedEvent.data.data])
+                            security: processSecurity()
                         ]
 				break
         	case "event":
@@ -266,7 +270,7 @@ def lanEventHandler(evt) {
                 break
         }
     }
-    
+
 }
 
 private sendLocalServerCommand(ip, command, payload) {
@@ -284,7 +288,7 @@ private sendLocalServerCommand(ip, command, payload) {
 private getHubLanEndpoint() {
 	def server = [:]
 	location.hubs.each {
-	    //look for enabled modules
+	    // look for enabled modules
         def ip = it?.localIP
         def port = it?.localSrvPortTCP
         if (ip && port) {
@@ -326,41 +330,44 @@ private processEvent(data) {
     def eventName = data?.event
     def eventValue = data?.value
     def deviceId = data?.id
-    def deviceModule = data?.module
     def deviceName = data?.name.capitalize()
     def deviceType = data?.type
     def description = data?.description
+
     if (description) {
     	log.info 'Received event: ' + description
     } else {
-    	log.info "Received ${eventName} event for module ${deviceModule}, device ${deviceName}, value ${eventValue}, data: $data"
+    	log.info "Received ${eventName} event for device ${deviceName}, value ${eventValue}, data: $data"
     }
 
 	// see if the specified device exists and create it if it does not exist
-    def deviceDNI = (deviceModule + '-' + deviceId).toLowerCase();
+    def deviceDNI = ('myq-' + deviceId).toLowerCase();
     def device = getChildDevice(deviceDNI)
     if(!device) {
 
-       log.info "Got a new device, lets create it"
+       log.info "Got a new device: " + deviceType +  " ... lets create it"
 
     	//build the device type
         def deviceHandler = null;
 
-        //support for various modules
-        if (deviceModule == "myq") {
-            deviceHandler = 'MyQ ' + deviceType.replace('GarageDoorOpener', 'Garage Door').replace('-', ' ').split()*.capitalize().join(' ')
+        // support for various device types
+        if (deviceType == "GarageDoorOpener") {
+            deviceHandler = 'MyQ Garage Door'
+        } else if (deviceType == "LampModule") {
+        	deviceHandler = 'MyQ Switch'
         }
 
         if (deviceHandler) {
+
+        	log.info "Looking for device handler: " + deviceHandler
+
         	// we have a valid device type, create it
             try {
-        		device = addChildDevice("ady624", deviceHandler, deviceDNI, null, [label: deviceName])
+        		device = addChildDevice("aromka", deviceHandler, deviceDNI, null, [label: deviceName])
         		device.sendEvent(name: 'id', value: deviceId);
-        		device.sendEvent(name: 'module', value: deviceModule);
         		device.sendEvent(name: 'type', value: deviceType);
             } catch(e) {
-            	log.info "Home Cloud Hub discovered a device that is not yet supported by your hub. Please find and install the [${deviceHandler}] device handler from https://github.com/ady624/HomeCloudHub/tree/master/devicetypes/ady624"
-            	log.info "If the repository is missing the [${deviceHandler}] device handler, please provide the device data to the author of this software so he can add it. Thank you. Device data is [${data}]"
+            	log.info "MyQ Controller discovered a device that is not yet supported by your hub. Please find and install the [${deviceHandler}] device handler from https://github.com/aromka/MyQController/tree/master/devicetypes/aromka"
             }
         }
     }
@@ -378,118 +385,60 @@ private processEvent(data) {
                 def oldValue = device.currentValue(key);
                 if (oldValue != value) {
 					device.sendEvent(name: key, value: value);
-                    //list of capabilities
-                    //http://docs.smartthings.com/en/latest/capabilities-reference.html
+                    // list of capabilities
+                    // http://docs.smartthings.com/en/latest/capabilities-reference.html
             	}
         	}
     	}
     }
 }
 
-private processSecurity(data) {
-	if (!data) {
-    	data = params
-    }
-    
-	def module = data?.module
-    if (module) {
-		log.info "Received request for security tokens for module ${module}"
-    } else {
-		log.info "Received request for security tokens for all modules"
-    }
+private processSecurity() {
+	doMyQLogin(false, true)
 
-	// we are provided an endpoint to which to send command requests
-	state.hch.security.each {
-	    //look for enabled modules
-        def name = it?.key
-        def config = it?.value
-        if (config.enabled && ((name == module) || !module)) {
-        	switch (name) {
-            	case "myq":
-                	doMyQLogin(false, !module)
-                    break
-            }
-	        config.age = (config.connected ? (now() - config.connected) / 1000 : null)
-        }
-    }
+	def config = state.hch.security
+    config.age = (config.connected ? (now() - config.connected) / 1000 : null)
 
-    log.info "Providing security tokens to Home Cloud Hub"
-    if (module) {
-        //we only requested one module for refresh
-        def sl = [:]
-        if (state.hch.security[module]) {
-        	sl[module] = state.hch.security[module];
-        }
-        return sl;
-    } else {
-    	return state.hch.security;
-    }
+    log.info "Providing security tokens to MyQ Controller"
+    return state.hch.security;
 }
 
 
 /***********************************************************************/
-/*                       EXTERNAL COMMAND PROXY                        */
+/*                          MYQ COMMANDS                        */
 /***********************************************************************/
 def proxyCommand(device, command, value) {
-	// child devices will use us to proxy things over to the homecloudhub.com service
-	def module = device.currentValue('module')
-    try {
-        return "cmd_${module}"(device, command, value, false)
-    } catch(e) {
-    	return "Error proxying command: ${e}"
-    }
+    exec(device, command, value, false)
 }
 
-
-/***********************************************************************/
-/*                          MYQ MODULE COMMANDS                        */
-/***********************************************************************/
-def cmd_myq(device, command, value, retry) {
+def exec(device, command, value, retry) {
 
 	// are we allowed to use MyQ?
-   	def module_name = "myq"
-	if (!state.hch.useMyQ || !(state.hch.security && state.hch.security[module_name] && state.hch.security[module_name].controllable)) {
-    	//we are either not using this module or we can't controll it
+	if (!(state.hch.security && state.hch.security.controllable)) {
     	return "No permission to control MyQ"
     }
 
+	// get myq login
 	if (!doMyQLogin(false, retry)) {
     	log.error "Failed sending command to MyQ because we could not connect"
     }
 
-	// using the cookies, retrieve the auth tokens
-    def attrName = null
-    def attrValue = null
-    switch (device.currentValue("type")) {
-    	case "GarageDoorOpener":
-        	switch (command) {
-            	case "open":
-                	attrName = "desireddoorstate"
-                	attrValue = 1
-                	break;
-            	case "close":
-                	attrName = "desireddoorstate"
-                	attrValue = 0
-                	break;
-            }
-        	break;
-    }
-
     def result = false
     def message = ""
-    if (attrName && attrValue != null) {
+    if (command && value != null) {
+    	log.info "Setting device " + device.currentValue("type") + ": " + command + "=" + value
     	try {
             result = httpPutJson([
-                uri: "https://myqexternal.myqdevice.com/api/v4/deviceAttribute/putDeviceAttribute?appId=" + getMyQAppId() + "&securityToken=${state.hch.security[module_name].securityToken}",
+                uri: "https://myqexternal.myqdevice.com/api/v4/deviceAttribute/putDeviceAttribute?appId=" + getMyQAppId() + "&securityToken=${state.hch.security.securityToken}",
                 headers: [
                     "User-Agent": "Chamberlain/2793 (iPhone; iOS 9.3; Scale/2.00)"
                 ],
                 body: [
 					ApplicationId: getMyQAppId(),
-					SecurityToken: state.hch.security[module_name].securityToken,
+					SecurityToken: state.hch.security.securityToken,
                     MyQDeviceId: device.currentValue('id'),
-					AttributeName: attrName,
-                    AttributeValue: attrValue
+					AttributeName: command,
+                    AttributeValue: value
                 ]
             ]) { response ->
                 //check response, continue if 200 OK
@@ -502,12 +451,13 @@ def cmd_myq(device, command, value, retry) {
             if (result) {
             	return "Successfully sent command to MyQ: device [${device}] command [${command}] value [${value}] result [${message}]"
             } else {
-            	//if we failed and this was already a retry, give up
+            	// if we failed and this was already a retry, give up
             	if (retry) {
 		            return "Failed sending command to MyQ: ${message}"
                 }
-            	//we failed the first time, let's retry
-                return "cmd_${module_name}"(device, command, value, true)
+
+            	// we failed the first time, let's retry
+                return exec(device, command, value, true)
             }
 		} catch(e) {
     		message = "Failed sending command to MyQ: ${e}"

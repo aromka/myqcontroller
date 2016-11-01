@@ -15,14 +15,12 @@
  *
  **/
 
-/* module paths - please add your own path for node_modules if not here already */
 module.paths.push('/usr/lib/node_modules');
 module.paths.push('/usr/local/lib/node_modules');
 module.paths.push('../.');
 
 var app = new function () {
 
-    //modules
     var app = this,
         configFile = __dirname + '/config/config.json',
         node = {
@@ -33,42 +31,38 @@ var app = new function () {
             'colors': require('colors'),
             'fs': require('fs')
         },
+        myq = null,
         config = {},
-        modules = [],
         server = null;
 
     /**
-     * Process events from modules
+     * Process events
      */
-    function doProcessEvent(module, event) {
+    function doProcessEvent(event) {
         try {
             if (event) {
-                //log support
+                // log support
                 if (event.name == 'log') {
                     if (event.data) {
-                        event.data.module = module;
-                        log(event.data);
+                        console.log(event.data);
                     }
                 } else if (event.data && event.data.device) {
                     var device = event.data.device;
                     if (device.id && device.name && device.type) {
                         try {
                             var data = {
-                                module: module,
                                 id: device.id,
                                 name: device.name,
                                 type: device.type,
                                 event: event.name,
                                 value: event.data.value
                             };
-                            for (attr in device) {
+                            for (var attr in device) {
                                 if (attr.substr(0, 5) == 'data-') {
                                     data[attr] = device[attr];
                                 }
                             }
-                            log({
-                                info: 'Sending event to SmartThings: ' + (event.data.description || '')
-                            });
+                            console.log('Sending event to SmartThings: ' + (event.data.description || ''));
                             node.request.put({
                                     url: 'http://' + config.server.ip + ':' + config.server.port + '/event',
                                     headers: {
@@ -82,43 +76,18 @@ var app = new function () {
                                 },
                                 function (err, response, body) {
                                     if (err) {
-                                        log({
-                                            error: 'Failed sending event: ' + err
-                                        });
+                                        console.error('Failed sending event: ' + err);
                                     }
                                 });
 
                         } catch (e) {
-                            log({
-                                error: 'Error parsing event data: ' + e
-                            });
+                            console.error('Error parsing event data: ' + e);
                         }
                     }
                 }
             }
         } catch (e) {
             error('Failed to send event to SmartThings: ' + e);
-        }
-    }
-
-    function log(event) {
-        var t = (new Date()).toLocaleString();
-        if (event) {
-            event.module = event.module || 'myq';
-            if (event.info) {
-                console.log(t + ' [' + node.colors.cyan(event.module) + '] ' + event.info);
-            }
-            if (event.message) {
-                console.log(t + ' [' + node.colors.green(event.module) + '] ' + event.message);
-            }
-            if (event.alert) {
-                console.log(t + ' [' + node.colors.yellow(event.module) + '] ' + event.alert);
-            }
-            if (event.error) {
-                console.log(t + ' [' + node.colors.red(event.module) + '] ' + event.error);
-            }
-        } else {
-            console.log('');
         }
     }
 
@@ -130,13 +99,12 @@ var app = new function () {
      */
     function doProcessRequest(request, response) {
 
-        console.log('Server started');
-
         try {
             var urlp = node.url.parse(request.url, true),
                 query = urlp.query,
-                payload = null,
-                module;
+                payload = null;
+
+            console.log('Handling request for: ' + urlp.pathname);
 
             if (query && query.payload) {
                 payload = JSON.parse((new Buffer(query.payload, 'base64')).toString())
@@ -145,6 +113,7 @@ var app = new function () {
             if (request.method == 'GET') {
                 switch (urlp.pathname) {
                     case '/ping':
+                        console.log('Getting ping...');
                         response.writeHead(202, {
                             'Content-Type': 'application/json'
                         });
@@ -158,7 +127,7 @@ var app = new function () {
                     case '/init':
                         console.log('Received init request');
 
-                        if (payload && payload.server && payload.modules) {
+                        if (payload && payload.server) {
                             response.writeHead(202, {
                                 'Content-Type': 'application/json'
                             });
@@ -171,17 +140,13 @@ var app = new function () {
                                 }
                             }
 
-                            for (module in payload.modules) {
-                                var cfg = payload.modules[module];
-                                app.startModule(module, cfg);
-                            }
-
+                            app.start(payload.security);
                         }
                         break;
                 }
             }
         } catch (e) {
-            console.log("ERROR: " + e);
+            console.error("ERROR: " + e);
         }
 
         response.writeHead(500, {});
@@ -229,7 +194,7 @@ var app = new function () {
     /**
      * Start the server
      */
-    this.start = function () {
+    this.init = function () {
 
         console.log('==== MyQ Controller ====');
 
@@ -247,53 +212,50 @@ var app = new function () {
     };
 
     /**
-     * Start module
+     * Start
      *
-     * @param module
      * @param config
      */
-    this.startModule = function (module, config) {
+    this.start = function (config) {
         try {
-            console.log('Starting module ' + module);
+            var initial = !myq;
+            myq = myq || require('./service/myq.js');
+            myq.config = config;
 
-            var initial = !modules[module];
-            modules[module] = modules[module] || require('./modules/' + module + '.js');
-            modules[module].config = config;
-
-            if (initial || modules[module].failed) {
-                modules[module].start(app, module, config, function (event) {
-                    doProcessEvent(module, event);
+            if (initial || myq.failed) {
+                myq.start(app, config, function (event) {
+                    doProcessEvent(event);
                 });
             }
         } catch (e) {
-            console.error('Error starting module: ' + e);
+            console.error('Error starting myq: ' + e);
         }
     };
 
     /**
      * Refresh security tokens
-     * @param module
      */
-    this.refreshTokens = function (module) {
+    this.refreshTokens = function () {
 
         try {
             if (config.server && config.server.ip && config.server.port) {
-                node.request.put({
-                    url: 'http://' + config.server.ip + ':' + config.server.port,
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    json: true,
-                    body: {
-                        event: 'init',
-                        data: module
-                    }
-                });
+                node
+                    .request
+                    .put({
+                        url: 'http://' + config.server.ip + ':' + config.server.port,
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        json: true,
+                        body: {
+                            event: 'init'
+                        }
+                    });
             }
         } catch (e) {
         }
     };
 };
 
-// start the app
-app.start();
+// initialize the app
+app.init();
