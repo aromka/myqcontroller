@@ -1,0 +1,11 @@
+{
+  "name" : "myqcontroller",
+  "dependencies" : {
+    "request" : "*",
+    "colors" : "*",
+    "node-ssdp" : "*"
+  },
+  "scripts": {
+    "start" : "node server/index.js"
+  }
+}
