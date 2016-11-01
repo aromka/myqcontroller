@@ -42,10 +42,6 @@ metadata {
 	}
 }
 
-def installed() {
-	parent.proxyCommand(name: "switch", value: "off")
-}
-
 def parse(String description) {
 }
 

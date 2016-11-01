@@ -21,6 +21,7 @@
 definition(
     name: "MyQ Controller",
     namespace: "aromka",
+    singleInstance: true,
     author: "aromka",
     description: "Provides integration with MyQ Garage doors and switches",
     category: "Convenience",
@@ -38,69 +39,61 @@ private getLocalServerURN() {
 }
 
 preferences {
-	page(name: "prefWelcome", title: "Connect to MyQ Controller")
-    page(name: "prefPrepare", title: "Checking connection...")
-	page(name: "prefMyQ", title: "MyQ™ Integration")
-	page(name: "prefMyQConfirm", title: "MyQ™ Integration")
+	page(name: "prefWelcome")
+	page(name: "prefMyQValidate")
 }
 
 
 /***********************************************************************/
 /*                        INSTALLATION UI PAGES                        */
 /***********************************************************************/
-def prefWelcome(params) {
+def prefWelcome() {
 
-    state.ihch = [security]
+    atomicState.localServerIp = null
 
-    return dynamicPage(name: "prefWelcome", title: "Connect to MyQ Controller local server", nextPage: "prefPrepare") {
-        atomicState.hchLocalServerIp = null
-        def hchLocalServerIp = null
+    dynamicPage(name: "prefWelcome", title: "MyQ™ Integration", uninstall: true, nextPage: "prefMyQValidate") {
 
-        section("Configuration") {
-            input("hchLocalServerIp", "text", title: "Enter the IP of your local server", required: true, defaultValue: "192.168.0.")
+        section("Local Server Settings") {
+            input("localServerIp", "text", title: "Enter the IP of your local server", required: true, defaultValue: "192.168.0.")
         }
-    }
-}
 
-def prefPrepare(params) {
-    state.ihch.localServerIp = settings.hchLocalServerIp
-
-    if (doLocalLogin()) {
-    	doMyQLogin(true, true)
-		return prefMyQ()
-	} else {
-        return dynamicPage(name: "prefPrepare",  title: "Error connecting to MyQ Controller local server") {
-            section(){
-                paragraph "Sorry, your local server does not seem to respond at ${state.ihch.localServerIp}."
-            }
-        }
-    }
-}
-
-def prefMyQ() {
-    return dynamicPage(name: "prefMyQ", title: "MyQ™ Integration", nextPage:"prefMyQConfirm") {
-        section("MyQ Login Credentials"){
+        section("MyQ Credentials"){
             input("myqUsername", "email", title: "Username", description: "Your MyQ™ login", required: true)
             input("myqPassword", "password", title: "Password", description: "Your MyQ™ password", required: true)
         }
+
         section("Permissions") {
             input("myqControllable", "bool", title: "Control MyQ", required: true, defaultValue: true)
         }
     }
 }
 
-def prefMyQConfirm() {
-    if (doMyQLogin(true, true)) {
-		return dynamicPage(name: "prefMyQConfirm", title: "MyQ™ Integration Completed") {
-			section(){
-				paragraph "Congratulations! You have successfully connected your MyQ™ system."
-			}
-    	}
-	} else {
-		return dynamicPage(name: "prefMyQConfirm",  title: "MyQ™ Integration") {
-			section(){
-				paragraph "Sorry, the credentials you provided for MyQ™ are invalid. Please go back and try again."
-			}
+def prefMyQValidate() {
+
+    state.security = [:]
+	state.localServerIp = settings.localServerIp
+	state.myqUsername = settings.myqUsername
+	state.myqPassword = settings.myqPassword
+
+	if (doLocalLogin()) {
+        if (doMyQLogin(true, true)) {
+            dynamicPage(name: "prefMyQValidate", title: "MyQ™ Integration Completed", install: true) {
+                section(){
+                    paragraph "Congratulations! You have successfully connected your MyQ™ system."
+                }
+            }
+        } else {
+            dynamicPage(name: "prefMyQValidate",  title: "MyQ™ Integration Error") {
+                section(){
+                    paragraph "Sorry, the credentials you provided for MyQ™ are invalid. Please go back and try again."
+                }
+            }
+        }
+    } else {
+	    dynamicPage(name: "prefMyQValidate",  title: "MyQ™ Integration Error") {
+            section(){
+                paragraph "Sorry, your local server does not seem to respond at ${state.localServerIp}."
+            }
         }
     }
 }
@@ -113,23 +106,23 @@ def prefMyQConfirm() {
 /***********************************************************************/
 private doLocalLogin() {
 
-	if(!state.ihch.subscribed) {
+	if(!state.subscribed) {
 		subscribe(location, null, lanEventHandler, [filterEvents:false])
-		state.ihch.subscribed = true
+		state.subscribed = true
     }
 
-    atomicState.hchPong = false
+    atomicState.pong = false
 
-    log.trace "Pinging local server at " + state.ihch.localServerIp
-    sendLocalServerCommand state.ihch.localServerIp, "ping", ""
+    log.trace "Pinging local server at " + state.localServerIp
+    sendLocalServerCommand state.localServerIp, "ping", ""
 
     def cnt = 50
-    def hchPong = false
+    def pong = false
     while (cnt--) {
         pause(200)
-        hchPong = atomicState.hchPong
-        log.trace "Pong: " + atomicState.hchPong
-        if (hchPong) {
+        pong = atomicState.pong
+        log.trace "Pong: " + atomicState.pong
+        if (pong) {
             return true
         }
     }
@@ -142,20 +135,19 @@ private doLocalLogin() {
 def doMyQLogin(installing, force) {
 
     // if cookies haven't expired and unless we need to force a login, we report all is pink
-    if (!installing && !force && state.hch.security && state.hch.security.connected && (state.hch.security.expires > now())) {
+    if (!installing && !force && state.security && state.security.connected && (state.security.expires > now())) {
 		log.info "Reusing previously login for MyQ"
 		return true;
     }
 
     // setup our security descriptor
-    def hch = (installing ? state.ihch : state.hch)
-    hch.security = [
-    	'enabled': !!(settings.myqUsername || settings.myqPassword),
+    state.security = [
+    	'enabled': !!(state.myqUsername || state.myqPassword),
         'controllable': settings.myqControllable,
         'connected': false
     ]
 
-    if (hch.security.enabled) {
+    if (state.security.enabled) {
     	log.info "Logging in to MyQ..."
 
         // perform the login, retrieve token
@@ -165,18 +157,17 @@ def doMyQLogin(installing, force) {
 			// check response, continue if 200 OK
        		if (response.status == 200) {
 				if (response.data && response.data.SecurityToken) {
-                    hch.security.securityToken = response.data.SecurityToken
-                    hch.security.connected = now()
-                	hch.security.expires = now() + 5000 //expires in 5 minutes
+                    state.security.securityToken = response.data.SecurityToken
+                    state.security.connected = now()
+                	state.security.expires = now() + 5000 //expires in 5 minutes
 					log.info "Successfully connected to MyQ"
                 	return true;
                 }
 			}
             return false;
  		}
-    } else {
-		return true;
-	}
+    }
+	return true;
 }
 
 
@@ -197,16 +188,17 @@ def uninstalled() {
 
 def initialize() {
 
+	log.info "Initializing MyQ controller..."
+
     state.installed = true
-    state.hch = state.ihch
 
 	// login to myq
    	doMyQLogin(false, false)
 
     // initialize the local server
-    sendLocalServerCommand state.hch.localServerIp, "init", [
+    sendLocalServerCommand state.localServerIp, "init", [
         server: getHubLanEndpoint(),
-        security: state.hch.security
+        security: state.security
     ]
 
     // listen to LAN incoming messages
@@ -226,17 +218,6 @@ private String convertHexToIP(hex) {
 /***********************************************************************/
 /*                    SMARTTHINGS EVENT HANDLERS                       */
 /***********************************************************************/
-def shmHandler(evt) {
-	def shmState = location.currentState("alarmSystemStatus")?.value;
-    log.info "Received notification of SmartThings Home Monitor having changed status to ${shmState}"
-}
-
-def modeChangeHandler(event) {
-    if (event.name == 'mode') {
-        log.info "Received notification of Location Mode having changed to ${event.value}"
-	}
-}
-
 def lanEventHandler(evt) {
     def description = evt.description
     def hub = evt?.hubId
@@ -248,19 +229,19 @@ def lanEventHandler(evt) {
 	}
 
     // ping response
-    if (parsedEvent.data && parsedEvent.data.service && (parsedEvent.data.service == "hch")) {
+    if (parsedEvent.data && parsedEvent.data.service && (parsedEvent.data.service == "myq")) {
 	    def msg = parsedEvent.data
         if (msg.result == "pong") {
         	//log in successful to local server
             log.info "Successfully contacted local server"
-			atomicState.hchPong = true
+			atomicState.pong = true
         }
     }
 
     if (parsedEvent.data && parsedEvent.data.event) {
         switch (parsedEvent.data.event) {
         	case "init":
-                sendLocalServerCommand state.hch.localServerIp, "init", [
+                sendLocalServerCommand state.localServerIp, "init", [
                             server: getHubLanEndpoint(),
                             security: processSecurity()
                         ]
@@ -341,11 +322,11 @@ private processEvent(data) {
     }
 
 	// see if the specified device exists and create it if it does not exist
-    def deviceDNI = ('myq-' + deviceId).toLowerCase();
+    def deviceDNI = 'myq-' + deviceId;
     def device = getChildDevice(deviceDNI)
-    if(!device) {
+    if (!device) {
 
-       log.info "Got a new device: " + deviceType +  " ... lets create it"
+       log.info "Adding new device: " + deviceType +  ", ID: " + deviceDNI
 
     	//build the device type
         def deviceHandler = null;
@@ -370,14 +351,14 @@ private processEvent(data) {
             	log.info "MyQ Controller discovered a device that is not yet supported by your hub. Please find and install the [${deviceHandler}] device handler from https://github.com/aromka/MyQController/tree/master/devicetypes/aromka"
             }
         }
+
+    } else {
+        log.info "Device already exists. ID: " + deviceDNI
     }
 
+    // we have a valid device that existed or was just created, now set the state
     if (device) {
-
-        log.info "Device already exists"
-
-    	// we have a valid device that existed or was just created, now set the state
-        for(param in data) {
+        for (param in data) {
             def key = param.key
         	def value = param.value
         	if ((key.size() > 5) && (key.substring(0, 5) == 'data-')) {
@@ -396,11 +377,10 @@ private processEvent(data) {
 private processSecurity() {
 	doMyQLogin(false, true)
 
-	def config = state.hch.security
-    config.age = (config.connected ? (now() - config.connected) / 1000 : null)
+    state.security.age = (state.security.connected ? (now() - state.security.connected) / 1000 : null)
 
     log.info "Providing security tokens to MyQ Controller"
-    return state.hch.security;
+    return state.security;
 }
 
 
@@ -414,7 +394,7 @@ def proxyCommand(device, command, value) {
 def exec(device, command, value, retry) {
 
 	// are we allowed to use MyQ?
-	if (!(state.hch.security && state.hch.security.controllable)) {
+	if (!(state.security && state.security.controllable)) {
     	return "No permission to control MyQ"
     }
 
@@ -429,13 +409,13 @@ def exec(device, command, value, retry) {
     	log.info "Setting device " + device.currentValue("type") + ": " + command + "=" + value
     	try {
             result = httpPutJson([
-                uri: "https://myqexternal.myqdevice.com/api/v4/deviceAttribute/putDeviceAttribute?appId=" + getMyQAppId() + "&securityToken=${state.hch.security.securityToken}",
+                uri: "https://myqexternal.myqdevice.com/api/v4/deviceAttribute/putDeviceAttribute?appId=" + getMyQAppId() + "&securityToken=${state.security.securityToken}",
                 headers: [
                     "User-Agent": "Chamberlain/2793 (iPhone; iOS 9.3; Scale/2.00)"
                 ],
                 body: [
 					ApplicationId: getMyQAppId(),
-					SecurityToken: state.hch.security.securityToken,
+					SecurityToken: state.security.securityToken,
                     MyQDeviceId: device.currentValue('id'),
 					AttributeName: command,
                     AttributeValue: value

@@ -118,7 +118,7 @@ var app = new function () {
                             'Content-Type': 'application/json'
                         });
                         response.write(JSON.stringify({
-                            service: 'hch',
+                            service: 'myq',
                             result: 'pong'
                         }));
                         response.end();
@@ -205,7 +205,7 @@ var app = new function () {
         ssdpServer.start();
 
         server = node.http.createServer(doProcessRequest);
-        server.listen(42457, '0.0.0.0'); // hchls - HCH Local Server
+        server.listen(42457, '0.0.0.0');
 
         // load the configuration from config file
         doLoadConfig();

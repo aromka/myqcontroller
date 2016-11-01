@@ -169,21 +169,19 @@ var exports = module.exports = new function () {
                                     }
                                 }
 
-                                if (!existing) {
-                                    if (!existing && device.type !== 'Gateway' && device['data-description'] !== '') {
-                                        devices.push(device);
-                                        callback({
-                                            name: 'discovery',
-                                            data: {
-                                                device: device,
-                                                description: 'Discovered device "' + device.name + '" <' + device.id + '>'
-                                            }
-                                        });
-                                    }
+                                if (!existing && device.type !== 'Gateway' && device['data-description'] !== '') {
+                                    devices.push(device);
+                                    callback({
+                                        name: 'discovery',
+                                        data: {
+                                            device: device,
+                                            description: 'Discovered device "' + device.name + '" <' + device.id + '>'
+                                        }
+                                    });
                                 }
                             }
 
-                            tmrRefresh = setTimeout(doGetDevices, 1000); //every second
+                            tmrRefresh = setTimeout(doGetDevices, 5 * 1000); // every 5 seconds
                             return;
                         }
                     } catch (e) {
