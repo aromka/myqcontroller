@@ -19,14 +19,14 @@
 **/
 
 definition(
-    name: "MyQ Hub",
+    name: "MyQ Controller",
     namespace: "aromka",
-    author: "Roman Alexeev",
+    author: "aromka",
     description: "Provides integration with MyQ Garage doors and switches",
     category: "Convenience",
-    iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
-    iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
-    iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
+    iconUrl: "https://s3.amazonaws.com/smartapp-icons/Meta/garage_contact.png",
+    iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Meta/garage_contact@2x.png",
+    iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Meta/garage_contact@2x.png",
     oauth: true)
 
 private getMyQAppId() {
@@ -40,7 +40,6 @@ private getLocalServerURN() {
 preferences {
 	page(name: "prefWelcome", title: "Connect to MyQ Controller")
     page(name: "prefModulesPrepare", title: "Home Cloud Hub Modules")
-    page(name: "prefModules", title: "Home Cloud Hub Modules")
 	page(name: "prefMyQ", title: "MyQ™ Integration")
 	page(name: "prefMyQConfirm", title: "MyQ™ Integration")
 }
