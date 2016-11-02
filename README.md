@@ -15,16 +15,14 @@ Based on [ady642/HomeCloudHub](https://github.com/ady624/HomeCloudHub)
  1. Click *Save*
  1. Click on the *Update from Repo* button 
  1. Select the `MyQController (master)` repository
- 1. Select the `aromka:MyQ Controller` application
- 1. Check *Publish* and click *Execute Update*
+ 1. Check the application, check *Publish*, and click *Execute Update*
  
 #### 2. Install Device Handlers
  
- 1. Go to [My Device Handlers](https://graph.api.smartthings.com/ide/devices)
- 1. Add repository, same as for SmartApp
+ 1. Go to *My Device Handlers*
  1. Click on *Update from Repo* button and select `MyQController (master)`
  1. Select devices that you want to install (Garage Door, Switch)
- 1. Check *Publish* and click *Execute Update*
+ 1. check *Publish*, and click *Execute Update*
 
 #### 3. Installing Local Server
 
@@ -52,6 +50,7 @@ Prerequisites: You must have node and npm installed on your system.
  1. If you entered everything correctly, you should see success confirmation message
  1. Press *Done*
  1. Your devices should appear in *My Home* -> *Things*
+ 1. You should also see all the devices that were found, as well as any commands sent in your console running the server
     
     
 # Known issues
