@@ -18,6 +18,7 @@ metadata {
         capability "Refresh"
         capability "Polling"
         capability "Garage Door Control"
+        capability "Contact Sensor"
         attribute "id", "string"
         attribute "module", "string"
         attribute "type", "string"
