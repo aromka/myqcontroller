@@ -8,7 +8,7 @@ Based on [ady642/HomeCloudHub](https://github.com/ady624/HomeCloudHub)
 #### 1. Install the SmartApp
 
  1. Go to your [SmartThings IDE](https://graph.api.smartthings.com/login/auth)
- 1. Go to [My SmartApps](https://graph.api.smartthings.com/ide/apps) link 
+ 1. Go to *My SmartApps* link 
  1. Click on *Settings* button 
  1. Click *Add new repository*
  1. Enter owner `aromka`, name `MyQController`, branch `master`. 
