@@ -1,11 +1,28 @@
 {
-  "name" : "myqcontroller",
-  "dependencies" : {
-    "request" : "*",
-    "colors" : "*",
-    "node-ssdp" : "*"
-  },
+  "name": "myqcontroller",
+  "version": "1.0.0",
+  "description": "MyQ integration for SmartThings",
+  "main": "server/index.js",
+  "dependencies": {},
+  "devDependencies": {},
   "scripts": {
-    "start" : "node server/index.js"
-  }
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aromka/myqcontroller.git"
+  },
+  "keywords": [
+    "smartthings",
+    "myq",
+    "garage",
+    "door",
+    "switch"
+  ],
+  "author": "Roman Alexeev",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/aromka/myqcontroller/issues"
+  },
+  "homepage": "https://github.com/aromka/myqcontroller#readme"
 }
