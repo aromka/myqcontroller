@@ -62,7 +62,8 @@ var app = new function () {
                                     data[attr] = device[attr];
                                 }
                             }
-                            console.log('Sending event to SmartThings: ' + (event.data.description || ''));
+
+                            console.log(getTimestamp() + 'Sending event to ST: ' + (event.data.description || ''));
                             node.request.put({
                                     url: 'http://' + config.server.ip + ':' + config.server.port + '/event',
                                     headers: {
@@ -76,18 +77,18 @@ var app = new function () {
                                 },
                                 function (err, response, body) {
                                     if (err) {
-                                        console.error('Failed sending event: ' + err);
+                                        console.error(getTimestamp() + 'Failed sending event: ' + err);
                                     }
                                 });
 
                         } catch (e) {
-                            console.error('Error parsing event data: ' + e);
+                            console.error(getTimestamp() + 'Error parsing event data: ' + e);
                         }
                     }
                 }
             }
         } catch (e) {
-            error('Failed to send event to SmartThings: ' + e);
+            console.error(getTimestamp() + 'Failed to send event to SmartThings: ' + e);
         }
     }
 
@@ -104,7 +105,7 @@ var app = new function () {
                 query = urlp.query,
                 payload = null;
 
-            console.log('Handling request for: ' + urlp.pathname);
+            console.log(getTimestamp() + 'Handling request for: ' + urlp.pathname);
 
             if (query && query.payload) {
                 payload = JSON.parse((new Buffer(query.payload, 'base64')).toString())
@@ -113,7 +114,7 @@ var app = new function () {
             if (request.method == 'GET') {
                 switch (urlp.pathname) {
                     case '/ping':
-                        console.log('Getting ping...');
+                        console.log(getTimestamp() + 'Getting ping... replying pong');
                         response.writeHead(202, {
                             'Content-Type': 'application/json'
                         });
@@ -125,7 +126,7 @@ var app = new function () {
                         return;
 
                     case '/init':
-                        console.log('Received init request');
+                        console.log(getTimestamp() + 'Received init request');
 
                         if (payload && payload.server) {
                             response.writeHead(202, {
@@ -133,20 +134,13 @@ var app = new function () {
                             });
                             response.end();
 
-                            if (payload.server.ip && payload.server.port) {
-                                config.server = payload.server || config.server;
-                                if (config.server.ip && config.server.port) {
-                                    doSaveConfig();
-                                }
-                            }
-
                             app.start(payload.security);
                         }
                         break;
                 }
             }
         } catch (e) {
-            console.error("ERROR: " + e);
+            console.error(getTimestamp() + "ERROR: " + e);
         }
 
         response.writeHead(500, {});
@@ -160,13 +154,13 @@ var app = new function () {
 
         node.fs.readFile(configFile, function read(err, data) {
             if (err) {
-                console.error('Failed to load config.json file');
+                console.error(getTimestamp() + 'Failed to load config.json file');
             }
 
             try {
                 config.server = JSON.parse(data);
                 if (config.server && config.server.ip && config.server.port) {
-                    console.log('Retrieved config for server: ' + config.server.ip + ':' + config.server.port);
+                    console.log(getTimestamp() + 'Retrieved config for server: ' + config.server.ip + ':' + config.server.port);
 
                     node
                         .request
@@ -182,13 +176,22 @@ var app = new function () {
                         });
                 }
             } catch (e) {
-                console.error('Failed reading config file: ' + e);
+                console.error(getTimestamp() + 'Failed reading config file: ' + e);
             }
         });
     }
 
-    function doSaveConfig() {
-        node.fs.writeFile(configFile, JSON.stringify(config.server, null, 4));
+    /**
+     * Get timestamp string for the log
+     */
+    function getTimestamp() {
+        var dt = new Date(),
+            pad = function(val) {
+                return val < 10 ? '0' + val : val;
+            };
+
+        return '[' + pad(dt.getDate()) + '/' + pad(dt.getMonth()) + ' ' +
+            pad(dt.getHours()) + ':' + pad(dt.getMinutes()) + ':' + pad(dt.getSeconds()) + '] ';
     }
 
     /**
@@ -196,7 +199,7 @@ var app = new function () {
      */
     this.init = function () {
 
-        console.log('==== MyQ Controller ====');
+        console.log('=== === === MyQ Controller === === ===');
 
         config = {};
 
@@ -228,7 +231,7 @@ var app = new function () {
                 });
             }
         } catch (e) {
-            console.error('Error starting myq: ' + e);
+            console.error(getTimestamp() + 'Error starting myq: ' + e);
         }
     };
 

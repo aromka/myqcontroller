@@ -40,7 +40,7 @@ var exports = module.exports = new function () {
 
     // initialization of cookies
     function doInit() {
-        console.log('Initializing...');
+        console.log(getTimestamp() + 'Initializing...');
         failed = false;
 
         // disable the automatic recovery
@@ -63,10 +63,8 @@ var exports = module.exports = new function () {
             return;
         }
 
-        console.log('Refreshing security tokens...');
+        console.log(getTimestamp() + 'Refreshing security tokens...');
         failed = true;
-
-        //abort refreshes
         if (tmrRefresh) {
             clearTimeout(tmrRefresh);
         }
@@ -140,7 +138,7 @@ var exports = module.exports = new function () {
                                                 oldValue = devices[i]['data-door'];
                                                 newValue = device['data-door'];
                                                 notify = true;
-                                            } else if(devices[i]['data-switch'] != device['data-switch']) {
+                                            } else if (devices[i]['data-switch'] != device['data-switch']) {
                                                 attribute = 'data-switch';
                                                 oldValue = devices[i]['data-switch'];
                                                 newValue = device['data-switch'];
@@ -186,14 +184,14 @@ var exports = module.exports = new function () {
                         }
                     } catch (e) {
                         // reinitialize after an error
-                        console.error('Error reading device list: ' + e);
+                        console.error(getTimestamp() + 'Error reading device list: ' + e);
                         doRecover();
                         return;
                     }
                 }
             }
             //reinitialize on error
-            console.error('Error getting device list: ' + err);
+            console.error(getTimestamp() + 'Error getting device list: ' + err);
             doRecover();
         };
 
@@ -274,9 +272,8 @@ var exports = module.exports = new function () {
 
             if (attr == 'data-door') {
                 device['data-contact'] = value;
-            } else if(attr == 'data-light') {
+            } else if (attr == 'data-light') {
                 device['data-switch'] = value;
-                console.log('got switch?');
             }
 
             return {
@@ -286,6 +283,19 @@ var exports = module.exports = new function () {
             }
         }
         return false;
+    }
+
+    /**
+     * Get timestamp string for the log
+     */
+    function getTimestamp() {
+        var dt = new Date(),
+            pad = function(val) {
+                return val < 10 ? '0' + val : val;
+            };
+
+        return '[' + pad(dt.getDate()) + '/' + pad(dt.getMonth()) + ' ' +
+            pad(dt.getHours()) + ':' + pad(dt.getMinutes()) + ':' + pad(dt.getSeconds()) + '] ';
     }
 
     /**
