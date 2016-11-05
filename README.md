@@ -97,7 +97,32 @@ Run the server
     
 And update the IP in MyQ Controller SmartApp in the SmartThings app.
 
+
+#### Running the server on the background / after bootup
+
+You can add a command to your /etc/rc.local
+
+    sudo nano /etc/rc.local
     
+and add the following content right before `exit 0`
+
+    exec 2> /tmp/rc.local.log      # send stderr from rc.local to a log file
+    exec 1>&2                      # send stdout to the same log file
+    set -x                         # tell sh to display commands before execution
+    
+    node /home/pi/Apps/myqcontroller/server &
+
+This will run the MyQController server after raspberry pi boots up, and will log the output to `/tmp/rc.local.log` file.
+
+Restart the system
+
+    sudo reboot
+    
+You can tail the logs to make sure everything works as expected
+
+    tail -f /tmp/rc.local.log 
+    
+
     
 # Known issues
  
