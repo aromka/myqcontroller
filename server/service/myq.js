@@ -190,6 +190,7 @@ var exports = module.exports = new function () {
                     }
                 }
             }
+            
             //reinitialize on error
             console.error(getTimestamp() + 'Error getting device list: ' + err);
             doRecover();

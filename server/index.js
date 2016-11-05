@@ -15,10 +15,6 @@
  *
  **/
 
-module.paths.push('/usr/lib/node_modules');
-module.paths.push('/usr/local/lib/node_modules');
-module.paths.push('../.');
-
 var app = new function () {
 
     var app = this,
@@ -28,7 +24,6 @@ var app = new function () {
             'http': require('http'),
             'url': require('url'),
             'request': require('request'),
-            'colors': require('colors'),
             'fs': require('fs')
         },
         myq = null,
@@ -173,6 +168,10 @@ var app = new function () {
                             body: {
                                 event: 'init'
                             }
+                        }, function() {
+                            console.log(getTimestamp() + 'Done.');
+                        }, function(err) {
+                            console.error(getTimestamp() + 'Failed: ' + err);
                         });
                 }
             } catch (e) {

@@ -3,7 +3,10 @@
   "version": "1.1.1",
   "description": "MyQ integration for SmartThings",
   "main": "server/index.js",
-  "dependencies": {},
+  "dependencies": {
+    "node-ssdp": "^2.9.0",
+    "request": "^2.78.0"
+  },
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

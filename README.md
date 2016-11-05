@@ -28,10 +28,12 @@ Based on [ady642/HomeCloudHub](https://github.com/ady624/HomeCloudHub)
 
 Prerequisites: You must have node and npm installed on your system.
 
- 1. Run `npm install myqcontroller` from directory where you want the server installed
+ 1. Run `git clone https://github.com/aromka/myqcontroller.git` from directory where you want the server installed
+ 1. Run `npm install`
  1. Find out the IP and Port of your SmartThings hub 
     - either from your router, 
     - or go to *My Hubs* in SmartThings IDE and look for `localIP` and `localSrvPortTCP`
+ 1. Copy `server/config/config.json.example` to `server/config/config.json` 
  1. Open `server/config/config.json` file and set `ip` and `port` variables
  1. Save and close config file
 
@@ -51,6 +53,40 @@ Prerequisites: You must have node and npm installed on your system.
  1. Press *Done*
  1. Your devices should appear in *My Home* -> *Things*
  1. You should also see all the devices that were found, as well as any commands sent in your console running the server
+    
+    
+# Raspberry Pi setup
+
+Installing on a fresh copy of [Raspbian NOOB](https://www.raspberrypi.org/downloads/noobs/) on [Raspberry Pi 3](https://www.amazon.com/gp/product/B01CD5VC92/ref=as_li_tl?ie=UTF8&camp=1789&creative=9325&creativeASIN=B01CD5VC92&linkCode=as2&tag=aromka-20&linkId=ae74c6aa2ea4a794b8662d6c9dcdc464)
+ 
+    sudo apt-get update
+    sudo apt-get upgrade
+    sudo apt-get npm
+   
+Optionally create a folder where you want to store MyQController app
+ 
+    mkdir ~/Apps
+    cd ~/Apps
+    git clone https://github.com/aromka/myqcontroller.git
+    npm install
+    
+Update config.json file
+
+    cd ~/Apps/myqcontroller/server/config
+    cp config.json.example config.json
+    nano config.json
+
+And set your SmartThings Hub's IP and port. Now run the server.
+Find out your Raspberry Pi's IP address on your local network (you will need to set it in the app)
+
+    hostname -I
+    
+Run the server
+    
+    node server
+    
+And update the IP in MyQ Controller SmartApp in the SmartThings app.
+
     
     
 # Known issues
