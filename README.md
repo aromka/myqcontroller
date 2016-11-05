@@ -58,6 +58,16 @@ Prerequisites: You must have node and npm installed on your system.
 # Raspberry Pi setup
 
 Installing on a fresh copy of [Raspbian NOOB](https://www.raspberrypi.org/downloads/noobs/) on [Raspberry Pi 3](https://www.amazon.com/gp/product/B01CD5VC92/ref=as_li_tl?ie=UTF8&camp=1789&creative=9325&creativeASIN=B01CD5VC92&linkCode=as2&tag=aromka-20&linkId=ae74c6aa2ea4a794b8662d6c9dcdc464)
+
+You can either do this through Raspberry Pi's console, or ssh to it from your mac / pc.
+
+If you want to ssh and run the commands from your mac, the default "Raspbian" OS will automatically broadcast its presence on your network under the mDNS name `raspberrypi`. If you are using Mac or Linux, you can reach your Pi easily:
+
+    ssh pi@raspberrypi.local
+    
+The default username for Raspbian is `pi` and the password is `raspberry`.
+
+Once you login, update the system and install npm:
  
     sudo apt-get update
     sudo apt-get upgrade
@@ -68,7 +78,7 @@ Optionally create a folder where you want to store MyQController app
     mkdir ~/Apps
     cd ~/Apps
     git clone https://github.com/aromka/myqcontroller.git
-    npm install
+    cd myqcontroller && npm install
     
 Update config.json file
 
