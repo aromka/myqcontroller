@@ -176,9 +176,6 @@ var app = new function () {
                             console.log(getTimestamp() + 'Config loaded');
                         }, function (err) {
                             console.error(getTimestamp() + 'Failed loading config: ' + err);
-                        })
-                        .on('error', function(e){
-                            console.error(getTimestamp() + 'Failed loading config: ' + e);
                         });
                 }
             } catch (e) {
