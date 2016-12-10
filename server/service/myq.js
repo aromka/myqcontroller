@@ -24,6 +24,7 @@ var exports = module.exports = new function () {
         app = null,
         config = {},
         callback = null,
+        failed = false,
         https = require('https'),
         request = require('request').defaults({
             jar: true,
@@ -41,6 +42,7 @@ var exports = module.exports = new function () {
     function doInit() {
         console.log(getTimestamp() + 'Initializing...');
 
+        failed = false;
         if (tmrRecover) {
             clearTimeout(tmrRecover);
         }
@@ -57,13 +59,18 @@ var exports = module.exports = new function () {
     // recovering procedures
     function doRecover() {
 
-        console.log(getTimestamp() + 'Refreshing security tokens...');
+        if (failed) {
+            return;
+        }
+        failed = true;
+
+        console.log(getTimestamp() + 'Trying to recover...');
         if (tmrRefresh) {
             clearTimeout(tmrRefresh);
         }
         tmrRefresh = null;
 
-        //setup automatic recovery
+        // setup automatic recovery
         if (tmrRecover) {
             clearTimeout(tmrRecover);
         }
@@ -330,6 +337,14 @@ var exports = module.exports = new function () {
      */
     this.processCommand = function (deviceId, command, value) {
         doProcessCommand(deviceId, command, value);
+    };
+
+    /**
+     *
+     * @returns {boolean}
+     */
+    this.failed = function () {
+        return !!failed;
     };
 
 }();

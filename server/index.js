@@ -248,6 +248,7 @@ var app = new function () {
 
         try {
             if (config.server && config.server.ip && config.server.port) {
+                console.log(getTimestamp() + 'Refreshing tokens...');
                 node
                     .request
                     .put({
