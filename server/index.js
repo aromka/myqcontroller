@@ -59,21 +59,26 @@ var app = new function () {
                             }
 
                             console.log(getTimestamp() + 'Sending event to ST: ' + (event.data.description || ''));
-                            node.request.put({
-                                    url: 'http://' + config.server.ip + ':' + config.server.port + '/event',
-                                    headers: {
-                                        'Content-Type': 'application/json'
+                            node
+                                .request
+                                .put({
+                                        url: 'http://' + config.server.ip + ':' + config.server.port + '/event',
+                                        headers: {
+                                            'Content-Type': 'application/json'
+                                        },
+                                        json: true,
+                                        body: {
+                                            event: 'event',
+                                            data: data
+                                        }
                                     },
-                                    json: true,
-                                    body: {
-                                        event: 'event',
-                                        data: data
-                                    }
-                                },
-                                function (err, response, body) {
-                                    if (err) {
-                                        console.error(getTimestamp() + 'Failed sending event: ' + err);
-                                    }
+                                    function (err, response, body) {
+                                        if (err) {
+                                            console.error(getTimestamp() + 'Failed sending event: ' + err);
+                                        }
+                                    })
+                                .on('error', function(e){
+                                    console.error(getTimestamp() + 'Error getting event request: ' + e);
                                 });
 
                         } catch (e) {
@@ -122,7 +127,6 @@ var app = new function () {
 
                     case '/init':
                         console.log(getTimestamp() + 'Received init request');
-
                         if (payload && payload.server) {
                             response.writeHead(202, {
                                 'Content-Type': 'application/json'
@@ -168,10 +172,13 @@ var app = new function () {
                             body: {
                                 event: 'init'
                             }
-                        }, function() {
-                            console.log(getTimestamp() + 'Done.');
-                        }, function(err) {
-                            console.error(getTimestamp() + 'Failed: ' + err);
+                        }, function () {
+                            console.log(getTimestamp() + 'Config loaded');
+                        }, function (err) {
+                            console.error(getTimestamp() + 'Failed loading config: ' + err);
+                        })
+                        .on('error', function(e){
+                            console.error(getTimestamp() + 'Failed loading config: ' + e);
                         });
                 }
             } catch (e) {
@@ -185,7 +192,7 @@ var app = new function () {
      */
     function getTimestamp() {
         var dt = new Date(),
-            pad = function(val) {
+            pad = function (val) {
                 return val < 10 ? '0' + val : val;
             };
 
@@ -252,9 +259,13 @@ var app = new function () {
                         body: {
                             event: 'init'
                         }
+                    })
+                    .on('error', function(e){
+                        console.error(getTimestamp() + 'Failed refreshing tokens: ' + e);
                     });
             }
         } catch (e) {
+            console.error(getTimestamp() + 'Refresh tokens failed: ' + e);
         }
     };
 };

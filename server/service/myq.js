@@ -19,31 +19,28 @@ module.paths.push('/usr/lib/node_modules');
 module.paths.push('/usr/local/lib/node_modules');
 
 var exports = module.exports = new function () {
+
     var
         app = null,
         config = {},
         callback = null,
-        failed = false,
         https = require('https'),
         request = require('request').defaults({
             jar: true,
             encoding: 'utf8',
             followRedirect: true,
-            followAllRedirects: true
+            followAllRedirects: true,
+            forever: true
         }),
         myQAppId = 'NWknvuBd7LoFHfXmKNMBcgajXtZEgKUh4V7WNzMidrpUUluDpVYVZx+xT4PCM5Kx',
         devices = [],
-        // recover timer for re-sync - if initial recover request failed
         tmrRecover = null,
-        // myq state polling timer
         tmrRefresh = null;
 
     // initialization of cookies
     function doInit() {
         console.log(getTimestamp() + 'Initializing...');
-        failed = false;
 
-        // disable the automatic recovery
         if (tmrRecover) {
             clearTimeout(tmrRecover);
         }
@@ -59,12 +56,8 @@ var exports = module.exports = new function () {
 
     // recovering procedures
     function doRecover() {
-        if (failed) {
-            return;
-        }
 
         console.log(getTimestamp() + 'Refreshing security tokens...');
-        failed = true;
         if (tmrRefresh) {
             clearTimeout(tmrRefresh);
         }
@@ -82,121 +75,13 @@ var exports = module.exports = new function () {
     /**
      * Get devices
      */
-    function doGetDevices() {
+    function doGetDevices(isRefresh) {
 
-        var handleResponse = function (err, response, body) {
+        if (!isRefresh) {
+            console.log(getTimestamp() + 'Getting device list...');
+        }
 
-            if (!err && response.statusCode == 200) {
-                if (body) {
-                    try {
-                        var data = JSON.parse(body);
-                        if ((data) && (data.Devices) && (data.Devices.length)) {
-
-                            // cycle through each device
-                            for (var d in data.Devices) {
-
-                                var dev = data.Devices[d],
-                                    device = {
-                                        'id': dev.MyQDeviceId,
-                                        'name': dev.TypeName.replace(' Opener', ''),
-                                        'type': dev.MyQDeviceTypeName.replace('VGDO', 'GarageDoorOpener'),
-                                        'serial': dev.SerialNumber
-                                    };
-
-                                // if not switch or door - skip this
-                                if (['GarageDoorOpener', 'LampModule'].indexOf(device.type) === -1) {
-                                    continue;
-                                }
-
-                                // set device attributes
-                                for (var prop in dev.Attributes) {
-                                    var attr = dev.Attributes[prop];
-                                    doSetDeviceAttribute(device, attr.Name, attr.Value);
-                                }
-
-                                // Rename device with actual MYQ door name
-                                if (device['data-description'] !== '') {
-                                    device.name = device['data-description'];
-                                }
-
-                                var existing = false;
-                                var notify = false;
-
-                                // we only push updates if there are any changes made
-                                for (var i in devices) {
-
-                                    if (devices[i].id == device.id) {
-                                        // found an existing device
-                                        existing = true;
-                                        if (JSON.stringify(devices[i]) != JSON.stringify(device)) {
-                                            var attribute = '',
-                                                oldValue = '',
-                                                newValue = '';
-
-                                            if (devices[i]['data-door'] != device['data-door']) {
-                                                attribute = 'data-door';
-                                                oldValue = devices[i]['data-door'];
-                                                newValue = device['data-door'];
-                                                notify = true;
-                                            } else if (devices[i]['data-switch'] != device['data-switch']) {
-                                                attribute = 'data-switch';
-                                                oldValue = devices[i]['data-switch'];
-                                                newValue = device['data-switch'];
-                                                notify = true;
-                                            }
-
-                                            // update the device
-                                            devices[i] = device;
-
-                                            // notify change
-                                            if (notify) {
-                                                callback({
-                                                    name: 'update',
-                                                    data: {
-                                                        device: device,
-                                                        attribute: attribute,
-                                                        oldValue: oldValue,
-                                                        newValue: newValue,
-                                                        value: newValue,
-                                                        description: 'Device "' + device.name + '" <' + device.id + '> changed its "' + attribute + '" value from "' + oldValue + '" to "' + newValue + '"'
-                                                    }
-                                                });
-                                            }
-                                        }
-                                        break;
-                                    }
-                                }
-
-                                if (!existing && device.type !== 'Gateway' && device['data-description'] !== '') {
-                                    devices.push(device);
-                                    callback({
-                                        name: 'discovery',
-                                        data: {
-                                            device: device,
-                                            description: 'Discovered device "' + device.name + '" <' + device.id + '>'
-                                        }
-                                    });
-                                }
-                            }
-
-                            tmrRefresh = setTimeout(doGetDevices, 5 * 1000); // every 5 seconds
-                            return;
-                        }
-                    } catch (e) {
-                        // reinitialize after an error
-                        console.error(getTimestamp() + 'Error reading device list: ' + e);
-                        doRecover();
-                        return;
-                    }
-                }
-            }
-            
-            //reinitialize on error
-            console.error(getTimestamp() + 'Error getting device list: ' + err);
-            doRecover();
-        };
-
-        // get devices from myq server
+        // get devices
         request
             .get({
                 url: 'https://myqexternal.myqdevice.com/api/UserDeviceDetails?appId=' + myQAppId +
@@ -204,7 +89,127 @@ var exports = module.exports = new function () {
                 headers: {
                     'User-Agent': 'Chamberlain/2793 (iPhone; iOS 9.3; Scale/2.00)'
                 }
-            }, handleResponse);
+            }, handleGetDeviceResponse)
+            .on('error', function(e){
+                console.error(getTimestamp() + 'Failed sending doGetDevice request: ' + e);
+                doRecover();
+            });
+    }
+
+    /**
+     * @param err
+     * @param response
+     * @param body
+     */
+    function handleGetDeviceResponse(err, response, body) {
+
+        if (err || response.statusCode != 200 || !body) {
+            // reinitialize on error
+            console.error(getTimestamp() + 'Error getting device list: ' + err);
+            doRecover();
+        }
+
+        try {
+            var data = JSON.parse(body);
+            if ((data) && (data.Devices) && (data.Devices.length)) {
+
+                // cycle through each device
+                for (var d in data.Devices) {
+
+                    var dev = data.Devices[d],
+                        device = {
+                            'id': dev.MyQDeviceId,
+                            'name': dev.TypeName.replace(' Opener', ''),
+                            'type': dev.MyQDeviceTypeName.replace('VGDO', 'GarageDoorOpener'),
+                            'serial': dev.SerialNumber
+                        };
+
+                    // if not switch or door - skip this
+                    if (['GarageDoorOpener', 'LampModule'].indexOf(device.type) === -1) {
+                        continue;
+                    }
+
+                    // set device attributes
+                    for (var prop in dev.Attributes) {
+                        var attr = dev.Attributes[prop];
+                        doSetDeviceAttribute(device, attr.Name, attr.Value);
+                    }
+
+                    // Rename device with actual MYQ door name
+                    if (device['data-description'] !== '') {
+                        device.name = device['data-description'];
+                    }
+
+                    var existing = false;
+                    var notify = false;
+
+                    // we only push updates if there are any changes made
+                    for (var i in devices) {
+
+                        if (devices[i].id == device.id) {
+                            // found an existing device
+                            existing = true;
+                            if (JSON.stringify(devices[i]) != JSON.stringify(device)) {
+                                var attribute = '',
+                                    oldValue = '',
+                                    newValue = '';
+
+                                if (devices[i]['data-door'] != device['data-door']) {
+                                    attribute = 'data-door';
+                                    oldValue = devices[i]['data-door'];
+                                    newValue = device['data-door'];
+                                    notify = true;
+                                } else if (devices[i]['data-switch'] != device['data-switch']) {
+                                    attribute = 'data-switch';
+                                    oldValue = devices[i]['data-switch'];
+                                    newValue = device['data-switch'];
+                                    notify = true;
+                                }
+
+                                // update the device
+                                devices[i] = device;
+
+                                // notify change
+                                if (notify) {
+                                    callback({
+                                        name: 'update',
+                                        data: {
+                                            device: device,
+                                            attribute: attribute,
+                                            oldValue: oldValue,
+                                            newValue: newValue,
+                                            value: newValue,
+                                            description: 'Device "' + device.name + '" <' + device.id + '> changed its "' + attribute + '" value from "' + oldValue + '" to "' + newValue + '"'
+                                        }
+                                    });
+                                }
+                            }
+                            break;
+                        }
+                    }
+
+                    if (!existing && device.type !== 'Gateway' && device['data-description'] !== '') {
+                        devices.push(device);
+                        callback({
+                            name: 'discovery',
+                            data: {
+                                device: device,
+                                description: 'Discovered device "' + device.name + '" <' + device.id + '>'
+                            }
+                        });
+                    }
+                }
+
+                // refresh every 10 seconds
+                tmrRefresh = setTimeout(function() {
+                    doGetDevices(true);
+                }, 10 * 1000);
+            }
+        } catch (e) {
+            // reinitialize after an error
+            console.error(getTimestamp() + 'Error reading device list: ' + e);
+            doRecover();
+        }
     }
 
     /**
@@ -291,7 +296,7 @@ var exports = module.exports = new function () {
      */
     function getTimestamp() {
         var dt = new Date(),
-            pad = function(val) {
+            pad = function (val) {
                 return val < 10 ? '0' + val : val;
             };
 
@@ -325,14 +330,6 @@ var exports = module.exports = new function () {
      */
     this.processCommand = function (deviceId, command, value) {
         doProcessCommand(deviceId, command, value);
-    };
-
-    /**
-     *
-     * @returns {boolean}
-     */
-    this.failed = function () {
-        return !!failed;
     };
 
 }();

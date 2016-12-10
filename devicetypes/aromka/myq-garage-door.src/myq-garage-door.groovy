@@ -50,11 +50,9 @@ def parse(String description) {
 }
 
 def open() {
-	log.trace "open()"
 	parent.proxyCommand(device, 'desireddoorstate', 1);
 }
 
 def close() {
-	log.trace "close()"
 	parent.proxyCommand(device, 'desireddoorstate', 0);
 }
