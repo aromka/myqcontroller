@@ -38,6 +38,11 @@ var exports = module.exports = new function () {
         tmrRecover = null,
         tmrRefresh = null;
 
+    // get api url
+    function getUrl(path) {
+        return 'https://myqexternal.myqdevice.com' + path + '?appId=' + myQAppId + '&securityToken=' + config.securityToken
+    }
+
     // initialization of cookies
     function doInit() {
         console.log(getTimestamp() + 'Initializing...');
@@ -91,13 +96,16 @@ var exports = module.exports = new function () {
         // get devices
         request
             .get({
-                url: 'https://myqexternal.myqdevice.com/api/UserDeviceDetails?appId=' + myQAppId +
-                '&securityToken=' + config.securityToken,
+                url: getUrl('/api/v4/userdevicedetails/get'),
                 headers: {
-                    'User-Agent': 'Chamberlain/2793 (iPhone; iOS 9.3; Scale/2.00)'
+                    'User-Agent': 'Chamberlain/3.73',
+                    'BrandId': '2',
+                    'ApiVersion': '4.1',
+                    'Culture': 'en',
+                    'MyQApplicationId': myQAppId
                 }
             }, handleGetDeviceResponse)
-            .on('error', function(e){
+            .on('error', function (e) {
                 console.error(getTimestamp() + 'Failed sending doGetDevice request: ' + e);
                 doRecover();
             });
@@ -126,10 +134,12 @@ var exports = module.exports = new function () {
                     var dev = data.Devices[d],
                         device = {
                             'id': dev.MyQDeviceId,
-                            'name': dev.TypeName.replace(' Opener', ''),
+                            'name': dev.MyQDeviceTypeName.replace(' Opener', ''),
                             'type': dev.MyQDeviceTypeName.replace('VGDO', 'GarageDoorOpener'),
                             'serial': dev.SerialNumber
                         };
+
+
 
                     // if not switch or door - skip this
                     if (['GarageDoorOpener', 'LampModule'].indexOf(device.type) === -1) {
@@ -139,7 +149,7 @@ var exports = module.exports = new function () {
                     // set device attributes
                     for (var prop in dev.Attributes) {
                         var attr = dev.Attributes[prop];
-                        doSetDeviceAttribute(device, attr.Name, attr.Value);
+                        doSetDeviceAttribute(device, attr.AttributeDisplayName, attr.Value);
                     }
 
                     // Rename device with actual MYQ door name
@@ -207,10 +217,10 @@ var exports = module.exports = new function () {
                     }
                 }
 
-                // refresh every 10 seconds
-                tmrRefresh = setTimeout(function() {
+                // refresh every 5 seconds
+                tmrRefresh = setTimeout(function () {
                     doGetDevices(true);
-                }, 10 * 1000);
+                }, 5 * 1000);
             }
         } catch (e) {
             // reinitialize after an error

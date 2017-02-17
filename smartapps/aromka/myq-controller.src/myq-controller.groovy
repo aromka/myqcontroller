@@ -61,10 +61,6 @@ def prefWelcome() {
             input("myqUsername", "email", title: "Username", description: "Your MyQ™ login", required: true)
             input("myqPassword", "password", title: "Password", description: "Your MyQ™ password", required: true)
         }
-
-        section("Permissions") {
-            input("myqControllable", "bool", title: "Control MyQ", required: true, defaultValue: true)
-        }
     }
 }
 
@@ -142,30 +138,50 @@ def doMyQLogin(installing, force) {
 
     // setup our security descriptor
     state.security = [
+        'securityToken': null,
     	'enabled': !!(state.myqUsername || state.myqPassword),
-        'controllable': settings.myqControllable,
-        'connected': false
+        'connected': 0
     ]
 
     if (state.security.enabled) {
-    	log.info "Logging in to MyQ..."
+    	log.debug "Logging in to MyQ... "
 
         // perform the login, retrieve token
-        def myQAppId = getMyQAppId()
+        try {
+            httpPost([
+                uri: "https://myqexternal.myqdevice.com",
+                path: "/api/v4/User/Validate",
+                headers: [
+                    "User-Agent": "Chamberlain/3.73",
+                    "BrandId": "2",
+                     "ApiVersion": "4.1",
+                     "Culture": "en",
+                     "MyQApplicationId": getMyQAppId()
+                ],
+                body: [
+                    username: settings.myqUsername,
+                    password: settings.myqPassword
+                ]
+            ]) { response ->
 
-        return httpGet("https://myqexternal.myqdevice.com/Membership/ValidateUserWithCulture?appId=${myQAppId}&securityToken=null&username=${settings.myqUsername}&password=${settings.myqPassword}&culture=en") { response ->
-			// check response, continue if 200 OK
-       		if (response.status == 200) {
-				if (response.data && response.data.SecurityToken) {
-                    state.security.securityToken = response.data.SecurityToken
-                    state.security.connected = now()
-                	state.security.expires = now() + 5000 //expires in 5 minutes
-					log.info "Successfully connected to MyQ"
-                	return true;
+                log.debug "Got response: " + response.status + " " + response.data
+
+                // check response, continue if 200 OK
+                if (response.status == 200) {
+
+                    if (response.data && response.data.SecurityToken != null) {
+                        state.security.securityToken = response.data.SecurityToken
+                        state.security.connected = now()
+                        state.security.expires = now() + 150000 //expires in 15 minutes
+                        log.info "Successfully connected to MyQ"
+                        return true;
+                    }
                 }
-			}
-            return false;
- 		}
+               return false;
+           }
+        } catch (SocketException e)	{
+            log.debug "API Error: $e"
+        }
     }
 	return true;
 }
@@ -242,16 +258,15 @@ def lanEventHandler(evt) {
         switch (parsedEvent.data.event) {
         	case "init":
                 sendLocalServerCommand state.localServerIp, "init", [
-                            server: getHubLanEndpoint(),
-                            security: processSecurity()
-                        ]
+                    server: getHubLanEndpoint(),
+                    security: processSecurity()
+                ]
 				break
         	case "event":
             	processEvent(parsedEvent.data.data);
                 break
         }
     }
-
 }
 
 private sendLocalServerCommand(ip, command, payload) {
@@ -393,11 +408,6 @@ def proxyCommand(device, command, value) {
 
 def exec(device, command, value, retry) {
 
-	// are we allowed to use MyQ?
-	if (!(state.security && state.security.controllable)) {
-    	return "No permission to control MyQ"
-    }
-
 	// get myq login
 	if (!doMyQLogin(false, retry)) {
     	log.error "Failed sending command to MyQ because we could not connect"
@@ -411,7 +421,11 @@ def exec(device, command, value, retry) {
             result = httpPutJson([
                 uri: "https://myqexternal.myqdevice.com/api/v4/deviceAttribute/putDeviceAttribute?appId=" + getMyQAppId() + "&securityToken=${state.security.securityToken}",
                 headers: [
-                    "User-Agent": "Chamberlain/2793 (iPhone; iOS 9.3; Scale/2.00)"
+                    "User-Agent": "Chamberlain/3.73",
+                    "BrandId": "2",
+                    "ApiVersion": "4.1",
+                    "Culture": "en",
+                    "MyQApplicationId": getMyQAppId()
                 ],
                 body: [
 					ApplicationId: getMyQAppId(),
@@ -423,11 +437,12 @@ def exec(device, command, value, retry) {
             ]) { response ->
                 //check response, continue if 200 OK
                 message = response.data
-                if ((response.status == 200) && response.data && (response.data.ReturnCode == 0)) {
+                if ((response.status == 200) && response.data && (response.data.SecurityToken != null)) {
                 	return true
                 }
                 return false
             }
+
             if (result) {
             	return "Successfully sent command to MyQ: device [${device}] command [${command}] value [${value}] result [${message}]"
             } else {
