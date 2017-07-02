@@ -131,7 +131,7 @@ private doLocalLogin() {
 def doMyQLogin(installing, force) {
 
     // if cookies haven't expired and unless we need to force a login, we report all is pink
-    if (!installing && !force && state.security && state.security.connected && (state.security.expires > now())) {
+    if (!installing && !force && state.security && state.security.connected && state.security.expires > now()) {
 		log.info "Reusing previously login for MyQ"
 		return true;
     }
@@ -139,51 +139,57 @@ def doMyQLogin(installing, force) {
     // setup our security descriptor
     state.security = [
         'securityToken': null,
-    	'enabled': !!(state.myqUsername || state.myqPassword),
+    	'enabled': !!(state.myqUsername && state.myqPassword),
         'connected': 0
     ]
 
-    if (state.security.enabled) {
-    	log.debug "Logging in to MyQ... "
-
-        // perform the login, retrieve token
-        try {
-            httpPost([
-                uri: "https://myqexternal.myqdevice.com",
-                path: "/api/v4/User/Validate",
-                headers: [
-                    "User-Agent": "Chamberlain/3.73",
-                    "BrandId": "2",
-                     "ApiVersion": "4.1",
-                     "Culture": "en",
-                     "MyQApplicationId": getMyQAppId()
-                ],
-                body: [
-                    username: settings.myqUsername,
-                    password: settings.myqPassword
-                ]
-            ]) { response ->
-
-                log.debug "Got response: " + response.status + " " + response.data
-
-                // check response, continue if 200 OK
-                if (response.status == 200) {
-
-                    if (response.data && response.data.SecurityToken != null) {
-                        state.security.securityToken = response.data.SecurityToken
-                        state.security.connected = now()
-                        state.security.expires = now() + 150000 //expires in 15 minutes
-                        log.info "Successfully connected to MyQ"
-                        return true;
-                    }
-                }
-               return false;
-           }
-        } catch (SocketException e)	{
-            log.debug "API Error: $e"
-        }
+    if (!state.security.enabled) {
+        log.info "Missing MyQ credentials"
+        return false;
     }
-	return true;
+
+    log.info "Logging in to MyQ... "
+
+    // perform the login, retrieve token
+    try {
+        httpPost([
+            uri: "https://myqexternal.myqdevice.com",
+            path: "/api/v4/User/Validate",
+            headers: [
+                "User-Agent": "Chamberlain/3.73",
+                "BrandId": "2",
+                 "ApiVersion": "4.1",
+                 "Culture": "en",
+                 "MyQApplicationId": getMyQAppId()
+            ],
+            body: [
+                username: settings.myqUsername,
+                password: settings.myqPassword
+            ]
+        ]) { response ->
+
+            log.info "Login response code: " + response.status
+
+            // check response, continue if 200 OK
+            if (response.status == 200) {
+
+                if (response.data && response.data.SecurityToken != null) {
+                    state.security.securityToken = response.data.SecurityToken
+                    state.security.connected = now()
+                    state.security.expires = now() + 900000 // expire in 15 minutes
+                    log.info "Successfully connected to MyQ"
+                    return true;
+                }
+            }
+
+            log.info "Response data: " + response.data
+            return false;
+       }
+    } catch (SocketException e)	{
+        log.debug "API Error: $e"
+    }
+
+	return false;
 }
 
 
@@ -392,9 +398,7 @@ private processEvent(data) {
 private processSecurity() {
 	doMyQLogin(false, true)
 
-    state.security.age = (state.security.connected ? (now() - state.security.connected) / 1000 : null)
-
-    log.info "Providing security tokens to MyQ Controller"
+    log.info "Providing security token to MyQ Controller"
     return state.security;
 }
 

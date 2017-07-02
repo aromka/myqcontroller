@@ -32,14 +32,11 @@ Prerequisites: You must have node and npm installed on your system.
  1. Run `npm install`
  1. Find out the IP and Port of your SmartThings hub 
     - either from your router, 
-    - or go to *My Hubs* in SmartThings IDE and look for `localIP` and `localSrvPortTCP`
- 1. Copy `server/config/config.json.example` to `server/config/config.json` 
- 1. Open `server/config/config.json` file and set `ip` and `port` variables
- 1. Save and close config file
+    - or go to *My Hubs* in SmartThings IDE and look for `localIP`
 
 #### 4. Running and Using SmartThings App
 
- 1. Run the server `node server` from `myqcontroller` directory
+ 1. Run the server `node server [your-localIP]` from `myqcontroller` directory, for example: `node server 192.168.0.10`
  1. Open SmartThings app
  1. Go to Marketplace -> SmartApps tab
  1. Scroll down and go to *MyApps*
@@ -98,7 +95,7 @@ Run the server
 And update the IP in MyQ Controller SmartApp in the SmartThings app.
 
 
-#### Running the server on the background / after bootup
+#### Running the server on the background / after startup
 
 You can add a command to your /etc/rc.local
 
@@ -110,7 +107,7 @@ and add the following content right before `exit 0`
     exec 1>&2                      # send stdout to the same log file
     set -x                         # tell sh to display commands before execution
     
-    node /home/pi/Apps/myqcontroller/server &
+    node /home/pi/Apps/myqcontroller/server [your-localIP] &
 
 This will run the MyQController server after raspberry pi boots up, and will log the output to `/tmp/rc.local.log` file.
 
@@ -118,14 +115,27 @@ Restart the system
 
     sudo reboot
     
-You can tail the logs to make sure everything works as expected
+You can tail the logs to make sure everything works as expected.
 
     tail -f /tmp/rc.local.log 
     
+#### Restart MyQ background process
 
+    sudo kill $(ps aux | grep [m]yq | awk '{print $2}') && sudo /etc/rc.local
     
 # Known issues
  
- * When you PC / Mac restarts when running a node server, you might get a different IP address, so app settings need to be update to assign the new IP.
+ * When you PC / Mac restarts when running a node server, you might get a different IP address, so app settings need to be update to assign the new IP, so you should both Raspberry PI (or your server) and SmartThing to static IP
+ 
+ ####Setting static IP on raspberry pi
+ 
+1.     sudo nano /etc/dhcpcd.conf
+     
+2.     interface eth0
+       static ip_address=192.168.1.XX/24
+       static routers=192.168.1.1
+       static domain_name_servers=192.168.1.1
+     
+3.     sudo reboot
  
  * If you run a server first time, and shortly kill it, and run it again - duplicate devices might be created, as it seems like ST doesn't return newly created devices within first few minutes. You can simply go and delete those duplicate devices to solve this.

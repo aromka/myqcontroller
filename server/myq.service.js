@@ -20,11 +20,10 @@ module.paths.push('/usr/local/lib/node_modules');
 
 var exports = module.exports = new function () {
 
-    var
-        app = null,
+    var app = null,
         config = {},
         callback = null,
-        failed = false,
+        shouldRecover = false,
         https = require('https'),
         request = require('request').defaults({
             jar: true,
@@ -35,51 +34,48 @@ var exports = module.exports = new function () {
         }),
         myQAppId = 'NWknvuBd7LoFHfXmKNMBcgajXtZEgKUh4V7WNzMidrpUUluDpVYVZx+xT4PCM5Kx',
         devices = [],
-        tmrRecover = null,
-        tmrRefresh = null;
+        tmrRecover = null;
 
-    // get api url
+    /**
+     * Get api url
+     *
+     * @param path
+     * @returns {string}
+     */
     function getUrl(path) {
         return 'https://myqexternal.myqdevice.com' + path + '?appId=' + myQAppId + '&securityToken=' + config.securityToken
     }
 
-    // initialization of cookies
+    /**
+     * Init
+     */
     function doInit() {
         console.log(getTimestamp() + 'Initializing...');
 
-        failed = false;
-        if (tmrRecover) {
-            clearTimeout(tmrRecover);
+        shouldRecover = false;
+        if (!config.securityToken) {
+            console.error('Could not get tokens');
         }
-        tmrRecover = null;
-
-        if (config.securityToken) {
-            doGetDevices();
-            setTimeout(doRecover, 4 * 3600 * 1000); // refresh security tokens every 4 hours
-        } else {
-            setTimeout(doRecover, 5 * 60 * 1000); // something did not work right, recover 5 minutes later
-        }
+        doGetDevices();
     }
 
-    // recovering procedures
+    /**
+     * Recover
+     */
     function doRecover() {
 
-        if (failed) {
+        if (!shouldRecover) {
             return;
         }
-        failed = true;
+        shouldRecover = false;
 
         console.log(getTimestamp() + 'Trying to recover...');
-        if (tmrRefresh) {
-            clearTimeout(tmrRefresh);
-        }
-        tmrRefresh = null;
 
-        // setup automatic recovery
+        // cancel previous timeout if its set
         if (tmrRecover) {
             clearTimeout(tmrRecover);
         }
-        tmrRecover = setTimeout(doRecover, 5 * 60 * 1000); // recover in 5 minutes if for some reason the tokens are not refreshed
+        tmrRecover = setTimeout(doRecover, 5 * 60 * 1000);
 
         app.refreshTokens();
     }
@@ -107,6 +103,7 @@ var exports = module.exports = new function () {
             }, handleGetDeviceResponse)
             .on('error', function (e) {
                 console.error(getTimestamp() + 'Failed sending doGetDevice request: ' + e);
+                shouldRecover = true;
                 doRecover();
             });
     }
@@ -118,12 +115,14 @@ var exports = module.exports = new function () {
      */
     function handleGetDeviceResponse(err, response, body) {
 
-        if (err || response.statusCode != 200 || !body) {
-            // reinitialize on error
+        // handle error
+        if (err || response.statusCode !== 200 || !body) {
             console.error(getTimestamp() + 'Error getting device list: ' + err);
-            doRecover();
+            shouldRecover = true;
+            return doRecover();
         }
 
+        // proceed with parsing body
         try {
             var data = JSON.parse(body);
             if ((data) && (data.Devices) && (data.Devices.length)) {
@@ -138,7 +137,6 @@ var exports = module.exports = new function () {
                             'type': dev.MyQDeviceTypeName.replace('VGDO', 'GarageDoorOpener'),
                             'serial': dev.SerialNumber
                         };
-
 
 
                     // if not switch or door - skip this
@@ -163,20 +161,20 @@ var exports = module.exports = new function () {
                     // we only push updates if there are any changes made
                     for (var i in devices) {
 
-                        if (devices[i].id == device.id) {
+                        if (devices[i].id === device.id) {
                             // found an existing device
                             existing = true;
-                            if (JSON.stringify(devices[i]) != JSON.stringify(device)) {
+                            if (JSON.stringify(devices[i]) !== JSON.stringify(device)) {
                                 var attribute = '',
                                     oldValue = '',
                                     newValue = '';
 
-                                if (devices[i]['data-door'] != device['data-door']) {
+                                if (devices[i]['data-door'] !== device['data-door']) {
                                     attribute = 'data-door';
                                     oldValue = devices[i]['data-door'];
                                     newValue = device['data-door'];
                                     notify = true;
-                                } else if (devices[i]['data-switch'] != device['data-switch']) {
+                                } else if (devices[i]['data-switch'] !== device['data-switch']) {
                                     attribute = 'data-switch';
                                     oldValue = devices[i]['data-switch'];
                                     newValue = device['data-switch'];
@@ -217,15 +215,15 @@ var exports = module.exports = new function () {
                     }
                 }
 
-                // refresh every 5 seconds
-                tmrRefresh = setTimeout(function () {
+                // refresh every 10 seconds
+                setTimeout(function () {
                     doGetDevices(true);
-                }, 5 * 1000);
+                }, 10 * 1000);
             }
         } catch (e) {
-            // reinitialize after an error
+            // try to recover
             console.error(getTimestamp() + 'Error reading device list: ' + e);
-            doRecover();
+            return doRecover();
         }
     }
 
@@ -241,7 +239,7 @@ var exports = module.exports = new function () {
 
         switch (device.type) {
             case 'GarageDoorOpener':
-                if (attribute == 'doorstate') {
+                if (attribute === 'doorstate') {
                     switch (value) {
                         case '1':
                         case '9':
@@ -266,7 +264,7 @@ var exports = module.exports = new function () {
                 break;
 
             case 'LampModule':
-                if (attribute == 'lightstate') {
+                if (attribute === 'lightstate') {
                     switch (value) {
                         case '0':
                             value = 'off';
@@ -289,13 +287,13 @@ var exports = module.exports = new function () {
         var attr = 'data-' + attribute;
 
         // return true if the value changed
-        if (device[attr] != value) {
+        if (device[attr] !== value) {
             var oldValue = device[attr];
             device[attr] = value;
 
-            if (attr == 'data-door') {
+            if (attr === 'data-door') {
                 device['data-contact'] = value;
-            } else if (attr == 'data-light') {
+            } else if (attr === 'data-light') {
                 device['data-switch'] = value;
             }
 
@@ -353,8 +351,8 @@ var exports = module.exports = new function () {
      *
      * @returns {boolean}
      */
-    this.failed = function () {
-        return !!failed;
+    this.shouldRecover = function () {
+        return !!shouldRecover;
     };
 
 }();

@@ -15,10 +15,10 @@
  *
  **/
 
-var app = new function () {
+var controller = new function () {
 
     var app = this,
-        configFile = __dirname + '/config/config.json',
+        configFile = __dirname + '/config.json',
         node = {
             'ssdp': require('node-ssdp'),
             'http': require('http'),
@@ -31,13 +31,21 @@ var app = new function () {
         server = null;
 
     /**
+     * Public methods
+     */
+    this.init = init;
+    this.start = start;
+    this.refreshTokens = refreshTokens;
+
+
+    /**
      * Process events
      */
     function doProcessEvent(event) {
         try {
             if (event) {
                 // log support
-                if (event.name == 'log') {
+                if (event.name === 'log') {
                     if (event.data) {
                         console.log(event.data);
                     }
@@ -53,7 +61,7 @@ var app = new function () {
                                 value: event.data.value
                             };
                             for (var attr in device) {
-                                if (attr.substr(0, 5) == 'data-') {
+                                if (attr.substr(0, 5) === 'data-') {
                                     data[attr] = device[attr];
                                 }
                             }
@@ -77,7 +85,7 @@ var app = new function () {
                                             console.error(getTimestamp() + 'Failed sending event: ' + err);
                                         }
                                     })
-                                .on('error', function(e){
+                                .on('error', function (e) {
                                     console.error(getTimestamp() + 'Error getting event request: ' + e);
                                 });
 
@@ -111,7 +119,7 @@ var app = new function () {
                 payload = JSON.parse((new Buffer(query.payload, 'base64')).toString())
             }
 
-            if (request.method == 'GET') {
+            if (request.method === 'GET') {
                 switch (urlp.pathname) {
                     case '/ping':
                         console.log(getTimestamp() + 'Getting ping... replying pong');
@@ -149,39 +157,40 @@ var app = new function () {
     /**
      * Load config file
      */
-    function doLoadConfig() {
+    function doLoadConfig(ip, port) {
 
-        node.fs.readFile(configFile, function read(err, data) {
-            if (err) {
-                console.error(getTimestamp() + 'Failed to load config.json file');
-            }
+        config.server = {
+            ip: ip,
+            port: port
+        };
 
-            try {
-                config.server = JSON.parse(data);
-                if (config.server && config.server.ip && config.server.port) {
-                    console.log(getTimestamp() + 'Retrieved config for server: ' + config.server.ip + ':' + config.server.port);
+        if (!config.server.ip) {
+            console.error('IP was not provided');
+            return;
+        }
 
-                    node
-                        .request
-                        .put({
-                            url: 'http://' + config.server.ip + ':' + config.server.port,
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            json: true,
-                            body: {
-                                event: 'init'
-                            }
-                        }, function () {
-                            console.log(getTimestamp() + 'Config loaded');
-                        }, function (err) {
-                            console.error(getTimestamp() + 'Failed loading config: ' + err);
-                        });
-                }
-            } catch (e) {
-                console.error(getTimestamp() + 'Failed reading config file: ' + e);
-            }
-        });
+        try {
+            console.log(getTimestamp() + 'Retrieved config for server: ' + config.server.ip + ':' + config.server.port);
+            node
+                .request
+                .put({
+                    url: 'http://' + config.server.ip + ':' + config.server.port,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    json: true,
+                    body: {
+                        event: 'init'
+                    }
+                }, function () {
+                    console.log(getTimestamp() + 'Config loaded');
+                }, function (err) {
+                    console.error(getTimestamp() + 'Failed loading config: ' + err);
+                });
+        } catch (e) {
+            console.error(getTimestamp() + 'Failed reading config file: ' + e);
+        }
+
     }
 
     /**
@@ -200,7 +209,7 @@ var app = new function () {
     /**
      * Start the server
      */
-    this.init = function () {
+    function init() {
 
         console.log('=== === === MyQ Controller === === ===');
 
@@ -213,22 +222,25 @@ var app = new function () {
         server = node.http.createServer(doProcessRequest);
         server.listen(42457, '0.0.0.0');
 
+        var ip = process.argv.slice(2)[0],
+            port = process.argv.slice(3)[0] || 39500;
+
         // load the configuration from config file
-        doLoadConfig();
-    };
+        doLoadConfig(ip, port);
+    }
 
     /**
      * Start
      *
      * @param config
      */
-    this.start = function (config) {
+    function start(config) {
         try {
             var initial = !myq;
-            myq = myq || require('./service/myq.js');
+            myq = myq || require('./myq.service.js');
             myq.config = config;
 
-            if (initial || myq.failed) {
+            if (initial || myq.shouldRecover) {
                 myq.start(app, config, function (event) {
                     doProcessEvent(event);
                 });
@@ -236,37 +248,41 @@ var app = new function () {
         } catch (e) {
             console.error(getTimestamp() + 'Error starting myq: ' + e);
         }
-    };
+    }
 
     /**
      * Refresh security tokens
      */
-    this.refreshTokens = function () {
+    function refreshTokens() {
+
+        if (!config.server || !config.server.ip || !config.server.port) {
+            console.log(getTimestamp() + 'Could not refresh tokens due to bad config');
+        }
 
         try {
-            if (config.server && config.server.ip && config.server.port) {
-                console.log(getTimestamp() + 'Refreshing tokens...');
-                node
-                    .request
-                    .put({
-                        url: 'http://' + config.server.ip + ':' + config.server.port,
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        json: true,
-                        body: {
-                            event: 'init'
-                        }
-                    })
-                    .on('error', function(e){
-                        console.error(getTimestamp() + 'Failed refreshing tokens: ' + e);
-                    });
-            }
+            console.log(getTimestamp() + 'Refreshing tokens...');
+            node
+                .request
+                .put({
+                    url: 'http://' + config.server.ip + ':' + config.server.port,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    json: true,
+                    body: {
+                        event: 'init'
+                    }
+                })
+                .on('error', function (e) {
+                    console.error(getTimestamp() + 'Failed refreshing tokens: ' + e);
+                    myq.shouldRecover = true;
+                });
         } catch (e) {
             console.error(getTimestamp() + 'Refresh tokens failed: ' + e);
+            myq.shouldRecover = true;
         }
-    };
+    }
 };
 
-// initialize the app
-app.init();
+// init
+controller.init();
