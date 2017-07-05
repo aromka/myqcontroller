@@ -151,8 +151,9 @@ def doMyQLogin(installing, force) {
     log.info "Logging in to MyQ... "
 
     // perform the login, retrieve token
+    def result = false
     try {
-        httpPost([
+        result = httpPost([
             uri: "https://myqexternal.myqdevice.com",
             path: "/api/v4/User/Validate",
             headers: [
@@ -189,7 +190,7 @@ def doMyQLogin(installing, force) {
         log.debug "API Error: $e"
     }
 
-	return false;
+	return result;
 }
 
 
