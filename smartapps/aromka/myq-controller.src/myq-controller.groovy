@@ -65,9 +65,6 @@ def prefWelcome() {
 def prefMyQValidate() {
 
     atomicState.security = [:]
-	atomicState.localServerIp = settings.localServerIp
-	atomicState.myqUsername = settings.myqUsername
-	atomicState.myqPassword = settings.myqPassword
 
 	if (doLocalLogin()) {
         if (doMyQLogin(true, true)) {
@@ -86,7 +83,7 @@ def prefMyQValidate() {
     } else {
 	    dynamicPage(name: "prefMyQValidate",  title: "MyQ™ Integration Error") {
             section(){
-                paragraph "Sorry, your local server does not seem to respond at ${atomicState.localServerIp}."
+                paragraph "Sorry, your local server does not seem to respond at ${settings.localServerIp}."
             }
         }
     }
@@ -107,8 +104,8 @@ private doLocalLogin() {
 
     atomicState.pong = false
 
-    log.trace "Pinging local server at " + atomicState.localServerIp
-    sendLocalServerCommand atomicState.localServerIp, "ping", ""
+    log.trace "Pinging local server at " + settings.localServerIp
+    sendLocalServerCommand settings.localServerIp, "ping", ""
 
     def cnt = 50
     def pong = false
@@ -137,7 +134,7 @@ def doMyQLogin(installing, force) {
     // setup our security descriptor
     atomicState.security = [
         'securityToken': null,
-    	'enabled': !!(atomicState.myqUsername && atomicState.myqPassword),
+    	'enabled': !!(settings.myqUsername && settings.myqPassword),
         'connected': 0
     ]
 
@@ -219,7 +216,7 @@ def initialize() {
    	doMyQLogin(false, false)
 
     // initialize the local server
-    sendLocalServerCommand atomicState.localServerIp, "init", [
+    sendLocalServerCommand settings.localServerIp, "init", [
         server: getHubLanEndpoint(),
         security: atomicState.security
     ]
@@ -264,7 +261,7 @@ def lanEventHandler(evt) {
     if (parsedEvent.data && parsedEvent.data.event) {
         switch (parsedEvent.data.event) {
         	case "init":
-                sendLocalServerCommand atomicState.localServerIp, "init", [
+                sendLocalServerCommand settings.localServerIp, "init", [
                     server: getHubLanEndpoint(),
                     security: processSecurity()
                 ]
