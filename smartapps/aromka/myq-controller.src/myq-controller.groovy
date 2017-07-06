@@ -34,10 +34,6 @@ private getMyQAppId() {
     return 'NWknvuBd7LoFHfXmKNMBcgajXtZEgKUh4V7WNzMidrpUUluDpVYVZx+xT4PCM5Kx'
 }
 
-private getLocalServerURN() {
-	return "urn:schemas-upnp-org:device:HomeCloudHubLocalServer:624"
-}
-
 preferences {
 	page(name: "prefWelcome")
 	page(name: "prefMyQValidate")
@@ -210,30 +206,17 @@ def initialize() {
 
 	log.info "Initializing MyQ controller..."
 
-    atomicState.installed = true
-
 	// login to myq
    	doMyQLogin(false, false)
 
     // initialize the local server
     sendLocalServerCommand settings.localServerIp, "init", [
-        server: getHubLanEndpoint(),
         security: atomicState.security
     ]
 
     // listen to LAN incoming messages
     subscribe(location, null, lanEventHandler, [filterEvents:false])
 }
-
-
-private Integer convertHexToInt(hex) {
-	Integer.parseInt(hex,16)
-}
-
-private String convertHexToIP(hex) {
-	[convertHexToInt(hex[0..1]),convertHexToInt(hex[2..3]),convertHexToInt(hex[4..5]),convertHexToInt(hex[6..7])].join(".")
-}
-
 
 /***********************************************************************/
 /*                    SMARTTHINGS EVENT HANDLERS                       */
@@ -242,11 +225,6 @@ def lanEventHandler(evt) {
     def description = evt.description
     def hub = evt?.hubId
 	def parsedEvent = parseLanMessage(description)
-
-	// discovery
-	if (parsedEvent.ssdpTerm && parsedEvent.ssdpTerm.contains(getLocalServerURN())) {
-        atomicState.hchLocalServerIp = convertHexToIP(parsedEvent.networkAddress)
-	}
 
     // ping response
     if (parsedEvent.data && parsedEvent.data.service && (parsedEvent.data.service == "myq")) {
@@ -262,7 +240,6 @@ def lanEventHandler(evt) {
         switch (parsedEvent.data.event) {
         	case "init":
                 sendLocalServerCommand settings.localServerIp, "init", [
-                    server: getHubLanEndpoint(),
                     security: processSecurity()
                 ]
 				break
@@ -282,23 +259,6 @@ private sendLocalServerCommand(ip, command, payload) {
         ],
         query: payload ? [payload: groovy.json.JsonOutput.toJson(payload).bytes.encodeBase64()] : []
     ))
-}
-
-
-private getHubLanEndpoint() {
-	def server = [:]
-	location.hubs.each {
-	    // look for enabled modules
-        def ip = it?.localIP
-        def port = it?.localSrvPortTCP
-        if (ip && port) {
-        	log.trace "Found local endpoint at ${ip}:${port}"
-        	server.ip = ip
-            server.port = port
-            return server
-        }
-    }
-    return server
 }
 
 

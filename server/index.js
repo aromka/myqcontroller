@@ -135,7 +135,7 @@ var controller = new function () {
 
                     case '/init':
                         console.log(getTimestamp() + 'Received init request');
-                        if (payload && payload.server) {
+                        if (payload) {
                             response.writeHead(202, {
                                 'Content-Type': 'application/json'
                             });
@@ -202,7 +202,7 @@ var controller = new function () {
                 return val < 10 ? '0' + val : val;
             };
 
-        return '[' + pad(dt.getDate()) + '/' + pad(dt.getMonth()) + ' ' +
+        return '[' + pad(dt.getDate()) + '/' + pad(dt.getMonth()+1) + ' ' +
             pad(dt.getHours()) + ':' + pad(dt.getMinutes()) + ':' + pad(dt.getSeconds()) + '] ';
     }
 
@@ -214,10 +214,6 @@ var controller = new function () {
         console.log('=== === === MyQ Controller === === ===');
 
         config = {};
-
-        var ssdpServer = new node.ssdp.Server();
-        ssdpServer.addUSN('urn:schemas-upnp-org:device:MQCLocalServer:624');
-        ssdpServer.start();
 
         server = node.http.createServer(doProcessRequest);
         server.listen(42457, '0.0.0.0');
