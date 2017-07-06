@@ -34,10 +34,6 @@ private getMyQAppId() {
     return 'NWknvuBd7LoFHfXmKNMBcgajXtZEgKUh4V7WNzMidrpUUluDpVYVZx+xT4PCM5Kx'
 }
 
-private getLocalServerURN() {
-	return "urn:schemas-upnp-org:device:HomeCloudHubLocalServer:624"
-}
-
 preferences {
 	page(name: "prefWelcome")
 	page(name: "prefMyQValidate")
@@ -48,8 +44,6 @@ preferences {
 /*                        INSTALLATION UI PAGES                        */
 /***********************************************************************/
 def prefWelcome() {
-
-    atomicState.localServerIp = null
 
     dynamicPage(name: "prefWelcome", title: "MyQ™ Integration", uninstall: true, nextPage: "prefMyQValidate") {
 
@@ -66,10 +60,7 @@ def prefWelcome() {
 
 def prefMyQValidate() {
 
-    state.security = [:]
-	state.localServerIp = settings.localServerIp
-	state.myqUsername = settings.myqUsername
-	state.myqPassword = settings.myqPassword
+    atomicState.security = [:]
 
 	if (doLocalLogin()) {
         if (doMyQLogin(true, true)) {
@@ -88,7 +79,7 @@ def prefMyQValidate() {
     } else {
 	    dynamicPage(name: "prefMyQValidate",  title: "MyQ™ Integration Error") {
             section(){
-                paragraph "Sorry, your local server does not seem to respond at ${state.localServerIp}."
+                paragraph "Sorry, your local server does not seem to respond at ${settings.localServerIp}."
             }
         }
     }
@@ -102,15 +93,15 @@ def prefMyQValidate() {
 /***********************************************************************/
 private doLocalLogin() {
 
-	if(!state.subscribed) {
+	if(!atomicState.subscribed) {
 		subscribe(location, null, lanEventHandler, [filterEvents:false])
-		state.subscribed = true
+		atomicState.subscribed = true
     }
 
     atomicState.pong = false
 
-    log.trace "Pinging local server at " + state.localServerIp
-    sendLocalServerCommand state.localServerIp, "ping", ""
+    log.trace "Pinging local server at " + settings.localServerIp
+    sendLocalServerCommand settings.localServerIp, "ping", ""
 
     def cnt = 50
     def pong = false
@@ -131,19 +122,19 @@ private doLocalLogin() {
 def doMyQLogin(installing, force) {
 
     // if cookies haven't expired and unless we need to force a login, we report all is pink
-    if (!installing && !force && state.security && state.security.connected && state.security.expires > now()) {
+    if (!installing && !force && atomicState.security && atomicState.security.connected && atomicState.security.expires > now()) {
 		log.info "Reusing previously login for MyQ"
 		return true;
     }
 
     // setup our security descriptor
-    state.security = [
+    atomicState.security = [
         'securityToken': null,
-    	'enabled': !!(state.myqUsername && state.myqPassword),
+    	'enabled': !!(settings.myqUsername && settings.myqPassword),
         'connected': 0
     ]
 
-    if (!state.security.enabled) {
+    if (!atomicState.security.enabled) {
         log.info "Missing MyQ credentials"
         return false;
     }
@@ -151,8 +142,9 @@ def doMyQLogin(installing, force) {
     log.info "Logging in to MyQ... "
 
     // perform the login, retrieve token
+    def result = false
     try {
-        httpPost([
+        result = httpPost([
             uri: "https://myqexternal.myqdevice.com",
             path: "/api/v4/User/Validate",
             headers: [
@@ -174,9 +166,11 @@ def doMyQLogin(installing, force) {
             if (response.status == 200) {
 
                 if (response.data && response.data.SecurityToken != null) {
-                    state.security.securityToken = response.data.SecurityToken
-                    state.security.connected = now()
-                    state.security.expires = now() + 900000 // expire in 15 minutes
+                    def tempStateSecurity = atomicState.security
+                    tempStateSecurity.securityToken = response.data.SecurityToken
+                    tempStateSecurity.connected = now()
+                    tempStateSecurity.expires = now() + 900000 // expire in 15 minutes
+                    atomicState.security = tempStateSecurity
                     log.info "Successfully connected to MyQ"
                     return true;
                 }
@@ -189,7 +183,7 @@ def doMyQLogin(installing, force) {
         log.debug "API Error: $e"
     }
 
-	return false;
+	return result;
 }
 
 
@@ -212,30 +206,17 @@ def initialize() {
 
 	log.info "Initializing MyQ controller..."
 
-    state.installed = true
-
 	// login to myq
    	doMyQLogin(false, false)
 
     // initialize the local server
-    sendLocalServerCommand state.localServerIp, "init", [
-        server: getHubLanEndpoint(),
-        security: state.security
+    sendLocalServerCommand settings.localServerIp, "init", [
+        security: atomicState.security
     ]
 
     // listen to LAN incoming messages
     subscribe(location, null, lanEventHandler, [filterEvents:false])
 }
-
-
-private Integer convertHexToInt(hex) {
-	Integer.parseInt(hex,16)
-}
-
-private String convertHexToIP(hex) {
-	[convertHexToInt(hex[0..1]),convertHexToInt(hex[2..3]),convertHexToInt(hex[4..5]),convertHexToInt(hex[6..7])].join(".")
-}
-
 
 /***********************************************************************/
 /*                    SMARTTHINGS EVENT HANDLERS                       */
@@ -244,11 +225,6 @@ def lanEventHandler(evt) {
     def description = evt.description
     def hub = evt?.hubId
 	def parsedEvent = parseLanMessage(description)
-
-	// discovery
-	if (parsedEvent.ssdpTerm && parsedEvent.ssdpTerm.contains(getLocalServerURN())) {
-        atomicState.hchLocalServerIp = convertHexToIP(parsedEvent.networkAddress)
-	}
 
     // ping response
     if (parsedEvent.data && parsedEvent.data.service && (parsedEvent.data.service == "myq")) {
@@ -263,8 +239,7 @@ def lanEventHandler(evt) {
     if (parsedEvent.data && parsedEvent.data.event) {
         switch (parsedEvent.data.event) {
         	case "init":
-                sendLocalServerCommand state.localServerIp, "init", [
-                    server: getHubLanEndpoint(),
+                sendLocalServerCommand settings.localServerIp, "init", [
                     security: processSecurity()
                 ]
 				break
@@ -284,23 +259,6 @@ private sendLocalServerCommand(ip, command, payload) {
         ],
         query: payload ? [payload: groovy.json.JsonOutput.toJson(payload).bytes.encodeBase64()] : []
     ))
-}
-
-
-private getHubLanEndpoint() {
-	def server = [:]
-	location.hubs.each {
-	    // look for enabled modules
-        def ip = it?.localIP
-        def port = it?.localSrvPortTCP
-        if (ip && port) {
-        	log.trace "Found local endpoint at ${ip}:${port}"
-        	server.ip = ip
-            server.port = port
-            return server
-        }
-    }
-    return server
 }
 
 
@@ -399,7 +357,7 @@ private processSecurity() {
 	doMyQLogin(false, true)
 
     log.info "Providing security token to MyQ Controller"
-    return state.security;
+    return atomicState.security;
 }
 
 
@@ -423,7 +381,7 @@ def exec(device, command, value, retry) {
     	log.info "Setting device " + device.currentValue("type") + ": " + command + "=" + value
     	try {
             result = httpPutJson([
-                uri: "https://myqexternal.myqdevice.com/api/v4/deviceAttribute/putDeviceAttribute?appId=" + getMyQAppId() + "&securityToken=${state.security.securityToken}",
+                uri: "https://myqexternal.myqdevice.com/api/v4/deviceAttribute/putDeviceAttribute?appId=" + getMyQAppId() + "&securityToken=${atomicState.security.securityToken}",
                 headers: [
                     "User-Agent": "Chamberlain/3.73",
                     "BrandId": "2",
@@ -433,7 +391,7 @@ def exec(device, command, value, retry) {
                 ],
                 body: [
 					ApplicationId: getMyQAppId(),
-					SecurityToken: state.security.securityToken,
+					SecurityToken: atomicState.security.securityToken,
                     MyQDeviceId: device.currentValue('id'),
 					AttributeName: command,
                     AttributeValue: value
