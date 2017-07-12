@@ -1,6 +1,6 @@
 {
   "name": "myqcontroller",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "MyQ integration for SmartThings",
   "main": "server/index.js",
   "dependencies": {
