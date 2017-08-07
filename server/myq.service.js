@@ -315,7 +315,7 @@ var exports = module.exports = new function () {
                 return val < 10 ? '0' + val : val;
             };
 
-        return '[' + pad(dt.getDate()) + '/' + pad(dt.getMonth()) + ' ' +
+        return '[' + pad(dt.getDate()) + '/' + pad(dt.getMonth()+1) + ' ' +
             pad(dt.getHours()) + ':' + pad(dt.getMinutes()) + ':' + pad(dt.getSeconds()) + '] ';
     }
 
