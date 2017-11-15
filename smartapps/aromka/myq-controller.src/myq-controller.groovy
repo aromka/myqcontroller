@@ -387,6 +387,7 @@ def exec(device, command, value, retry) {
                     "BrandId": "2",
                     "ApiVersion": "4.1",
                     "Culture": "en",
+                    "SecurityToken": atomicState.security.securityToken,
                     "MyQApplicationId": getMyQAppId()
                 ],
                 body: [
@@ -394,7 +395,9 @@ def exec(device, command, value, retry) {
 					SecurityToken: atomicState.security.securityToken,
                     MyQDeviceId: device.currentValue('id'),
 					AttributeName: command,
-                    AttributeValue: value
+                    AttributeValue: value,
+                    Format: json,
+                    Nojsoncallback: 1
                 ]
             ]) { response ->
                 //check response, continue if 200 OK

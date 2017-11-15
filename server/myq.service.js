@@ -43,7 +43,7 @@ var exports = module.exports = new function () {
      * @returns {string}
      */
     function getUrl(path) {
-        return 'https://myqexternal.myqdevice.com' + path + '?appId=' + myQAppId + '&securityToken=' + config.securityToken
+        return 'https://myqexternal.myqdevice.com' + path + '?filterOn=true&format=json&nojsoncallback=1&appId=' + myQAppId + '&securityToken=' + config.securityToken
     }
 
     /**
@@ -95,10 +95,12 @@ var exports = module.exports = new function () {
                 url: getUrl('/api/v4/userdevicedetails/get'),
                 headers: {
                     'User-Agent': 'Chamberlain/3.73',
+                    'Accept': '*/*',
                     'BrandId': '2',
                     'ApiVersion': '4.1',
                     'Culture': 'en',
-                    'MyQApplicationId': myQAppId
+                    'MyQApplicationId': myQAppId,
+                    'SecurityToken': config.securityToken
                 }
             }, handleGetDeviceResponse)
             .on('error', function (e) {
@@ -344,6 +346,7 @@ var exports = module.exports = new function () {
      * @param value
      */
     this.processCommand = function (deviceId, command, value) {
+        console.log(deviceId, command);
         doProcessCommand(deviceId, command, value);
     };
 
