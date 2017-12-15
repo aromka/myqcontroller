@@ -326,6 +326,11 @@ private processEvent(data) {
         		device = addChildDevice("aromka", deviceHandler, deviceDNI, null, [label: deviceName])
         		device.sendEvent(name: 'id', value: deviceId);
         		device.sendEvent(name: 'type', value: deviceType);
+                
+                def openButton = addChildDevice("smartthings", "Momentary Button Tile", deviceDNI + " Opener", null, [name: deviceName + " Opener", label: deviceName + " Opener"])
+                subscribe(openButton, "momentary.pushed", openDoor)
+                def closeButton = addChildDevice("smartthings", "Momentary Button Tile", deviceDNI + " Closer", null, [name: deviceName + " Closer", label: deviceName + " Closer"])
+                subscribe(closeButton, "momentary.pushed", closeDoor)
             } catch(e) {
             	log.info "MyQ Controller discovered a device that is not yet supported by your hub. Please find and install the [${deviceHandler}] device handler from https://github.com/aromka/MyQController/tree/master/devicetypes/aromka"
             }
@@ -333,6 +338,30 @@ private processEvent(data) {
 
     } else {
         log.info "Device already exists. ID: " + deviceDNI
+    }
+    
+    def openButton = getChildDevice(deviceDNI + " Opener")
+    if (!openButton) {
+        try {
+            openButton = addChildDevice("smartthings", "Momentary Button Tile", deviceDNI + " Opener", null, [name: deviceName + " Opener", label: deviceName + " Opener"])
+            subscribe(openButton, "momentary.pushed", openDoor)
+        } catch(e) {
+            log.info "MyQ Controller discovered a device that is not yet supported by your hub. Please find and install the Momentary Button Tile device handler"
+        }
+    } else {
+        log.info "OpenButton already exists."
+    }
+    
+    def closeButton = getChildDevice(deviceDNI + " Closer")
+    if (!closeButton) {
+        try {
+            closeButton = addChildDevice("smartthings", "Momentary Button Tile", deviceDNI + " Closer", null, [name: deviceName + " Closer", label: deviceName + " Closer"])
+            subscribe(closeButton, "momentary.pushed", closeDoor)
+        } catch(e) {
+            log.info "MyQ Controller discovered a device that is not yet supported by your hub. Please find and install the Momentary Button Tile device handler"
+        }
+    } else {
+        log.info "CloseButton already exists."
     }
 
     // we have a valid device that existed or was just created, now set the state
@@ -364,6 +393,22 @@ private processSecurity() {
 /***********************************************************************/
 /*                          MYQ COMMANDS                        */
 /***********************************************************************/
+def openDoor(evt) {
+    def doorDeviceDNI = evt.getDevice().deviceNetworkId
+    doorDeviceDNI = doorDeviceDNI.replace(" Opener", "")
+	def doorDevice = getChildDevice(doorDeviceDNI)
+    log.debug "Opening door."
+    doorDevice.open()
+}
+
+def closeDoor(evt) {
+    def doorDeviceDNI = evt.getDevice().deviceNetworkId
+    doorDeviceDNI = doorDeviceDNI.replace(" Closer", "")
+	def doorDevice = getChildDevice(doorDeviceDNI)
+    log.debug "Closing door."
+    doorDevice.close()
+}
+
 def proxyCommand(device, command, value) {
     exec(device, command, value, false)
 }
