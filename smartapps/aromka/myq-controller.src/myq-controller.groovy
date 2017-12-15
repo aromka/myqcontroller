@@ -325,12 +325,7 @@ private processEvent(data) {
             try {
         		device = addChildDevice("aromka", deviceHandler, deviceDNI, null, [label: deviceName])
         		device.sendEvent(name: 'id', value: deviceId);
-        		device.sendEvent(name: 'type', value: deviceType);
-                
-                def openButton = addChildDevice("smartthings", "Momentary Button Tile", deviceDNI + " Opener", null, [name: deviceName + " Opener", label: deviceName + " Opener"])
-                subscribe(openButton, "momentary.pushed", openDoor)
-                def closeButton = addChildDevice("smartthings", "Momentary Button Tile", deviceDNI + " Closer", null, [name: deviceName + " Closer", label: deviceName + " Closer"])
-                subscribe(closeButton, "momentary.pushed", closeDoor)
+        		device.sendEvent(name: 'type', value: deviceType);               
             } catch(e) {
             	log.info "MyQ Controller discovered a device that is not yet supported by your hub. Please find and install the [${deviceHandler}] device handler from https://github.com/aromka/MyQController/tree/master/devicetypes/aromka"
             }
